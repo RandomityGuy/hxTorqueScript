@@ -9,10 +9,11 @@ class Main {
 	static var failedFiles = 0;
 
 	static public function main():Void {
-		execDirectory("tests");
+		// execDirectory("mb");
+		execDirectory("D:/Marbleblast/PQ-src/Build/Cache/PQ/Marble Blast Platinum");
 		trace('Parsed ${successFiles} files out of ${successFiles + failedFiles} files');
 
-		// var f = File.getContent("main.cs");
+		// var f = File.getContent("mb/playGui.cs");
 		// var scanner = new Scanner(f);
 		// var toks = scanner.scanTokens();
 		// var parser = new Parser(toks);
@@ -26,7 +27,7 @@ class Main {
 			if (FileSystem.isDirectory(path + '/' + file)) {
 				execDirectory(path + '/' + file);
 			} else {
-				if (Path.extension(file) == 'cs' || Path.extension(file) == 'gui' || Path.extension(file) == 'mis' || Path.extension(file) == "mcs") {
+				if (Path.extension(file) == 'cs' || Path.extension(file) == 'gui') {
 					var f = File.getContent(path + '/' + file);
 					var scanner = new Scanner(f);
 					try {

@@ -1,7 +1,24 @@
 package expr;
 
+import haxe.macro.Type.Ref;
+
+enum TypeReq {
+	ReqNone;
+	ReqInt;
+	ReqFloat;
+	ReqString;
+}
+
 @:publicFields
-abstract class Expr {}
+class Expr {
+	function precompileStmt(compiler:Compiler, loopCount:Int):Int {
+		return 0;
+	}
+
+	function addBreakCount(compiler:Compiler) {
+		compiler.breakLineCount++;
+	}
+}
 
 @:publicFields
 class Label extends Expr {
@@ -84,7 +101,20 @@ class GlobalArray extends Expr {
 class ExprStatement extends Expr {}
 
 @:publicFields
-class Expression extends Expr {}
+class Expression extends Expr {
+	public function precompile(compiler:Compiler, type:TypeReq):Int {
+		return 0;
+	}
+
+	public function getPreferredType():TypeReq {
+		return TypeReq.ReqNone;
+	}
+
+	public override function precompileStmt(compiler:Compiler, loopCount:Int):Int {
+		addBreakCount(compiler);
+		return precompile(compiler, TypeReq.ReqNone);
+	}
+}
 
 @:publicFields
 class PackageDeclaration extends Expr {
@@ -102,9 +132,38 @@ class WhileControl extends ExprStatement {
 	var condition:Expression;
 	var exprs:Array<ExprStatement>;
 
+	var integer:Bool;
+	var breakOffset:Int;
+	var continueOffset:Int;
+	var loopBlockStartOffset:Int;
+
 	public function new(condition:Expression, exprs:Array<ExprStatement>) {
 		this.condition = condition;
 		this.exprs = exprs;
+	}
+
+	public override function precompileStmt(compiler:Compiler, loopCount:Int):Int {
+		addBreakCount(compiler);
+		var testSize = 0;
+
+		if (condition.getPreferredType() == TypeReq.ReqInt) {
+			integer = true;
+			testSize = condition.precompile(compiler, TypeReq.ReqInt);
+		} else {
+			integer = false;
+			testSize = condition.precompile(compiler, TypeReq.ReqFloat);
+		}
+
+		var blockSize = 0;
+		for (stmt in this.exprs) {
+			blockSize += stmt.precompileStmt(compiler, loopCount + 1);
+		}
+
+		loopBlockStartOffset = testSize + 2;
+		continueOffset = loopBlockStartOffset + blockSize;
+		breakOffset = continueOffset + testSize + 2;
+
+		return breakOffset;
 	}
 }
 
@@ -115,24 +174,73 @@ class ForControl extends ExprStatement {
 	var third:Expr;
 	var exprs:Array<ExprStatement>;
 
+	var integer:Bool;
+	var breakOffset:Int;
+	var continueOffset:Int;
+	var loopBlockStartOffset:Int;
+
 	public function new(first:Expr, second:Expr, third:Expr, exprs:Array<ExprStatement>) {
 		this.first = first;
 		this.second = second;
 		this.third = third;
 		this.exprs = exprs;
 	}
+
+	public override function precompileStmt(compiler:Compiler, loopCount:Int):Int {
+		return breakOffset;
+	}
 }
 
 @:publicFields
 class IfControl extends ExprStatement {
-	var condition:Expr;
+	var condition:Expression;
 	var exprs:Array<ExprStatement>;
 	var elseCtrl:Null<ElseControl>;
 
-	public function new(condition:Expr, exprs:Array<ExprStatement>, elseCtrl:Null<ElseControl>) {
+	var endifOffset:Int;
+	var elseOffset:Int;
+
+	var integer:Bool;
+
+	var propagate:Bool;
+
+	public function new(condition:Expression, exprs:Array<ExprStatement>, elseCtrl:Null<ElseControl>) {
 		this.condition = condition;
 		this.exprs = exprs;
 		this.elseCtrl = elseCtrl;
+	}
+
+	public override function precompileStmt(compiler:Compiler, loopCount:Int):Int {
+		var exprSize = 0;
+		addBreakCount(compiler);
+
+		if (condition.getPreferredType() == TypeReq.ReqInt) {
+			exprSize = condition.precompile(compiler, TypeReq.ReqInt);
+			integer = true;
+		} else {
+			exprSize = condition.precompile(compiler, TypeReq.ReqFloat);
+			integer = false;
+		}
+
+		var stmtsizes = exprs.map((expr) -> expr.precompileStmt(compiler, loopCount));
+		var ifSize = 0;
+		for (i in stmtsizes) {
+			ifSize += i;
+		}
+
+		if (this.elseCtrl == null) {
+			endifOffset = ifSize + 2 + exprSize;
+		} else {
+			elseOffset = ifSize + 2 + exprSize + 2;
+			stmtsizes = elseCtrl.exprs.map((expr) -> expr.precompileStmt(compiler, loopCount));
+			var elseSize = 0;
+			for (i in stmtsizes) {
+				elseSize += i;
+			}
+			endifOffset = elseOffset + elseSize;
+		}
+
+		return endifOffset;
 	}
 }
 
@@ -183,19 +291,45 @@ class DefaultControl extends ExprStatement {
 @:publicFields
 class BreakControl extends ExprStatement {
 	public function new() {}
+
+	public override function precompileStmt(compiler:Compiler, loopCount:Int):Int {
+		if (loopCount > 0) {
+			addBreakCount(compiler);
+			return 2;
+		}
+		trace("Warn: break outside of loop!");
+		return 0;
+	}
 }
 
 @:publicFields
 class ContinueControl extends ExprStatement {
 	public function new() {}
+
+	public override function precompileStmt(compiler:Compiler, loopCount:Int):Int {
+		if (loopCount > 0) {
+			addBreakCount(compiler);
+			return 2;
+		}
+		trace("Warn: continue outside of loop!");
+		return 0;
+	}
 }
 
 @:publicFields
 class ReturnControl extends ExprStatement {
-	var expr:Null<Expr>;
+	var expr:Null<Expression>;
 
-	public function new(expr:Null<Expr>) {
+	public function new(expr:Null<Expression>) {
 		this.expr = expr;
+	}
+
+	public override function precompileStmt(compiler:Compiler, loopCount:Int):Int {
+		if (expr == null) {
+			return 1;
+		} else {
+			return 1 + expr.precompile(compiler, TypeReq.ReqString);
+		}
 	}
 }
 

@@ -202,7 +202,7 @@ class Parser {
 	function returnControl():ReturnControl {
 		if (match([TokenType.Return])) {
 			advance();
-			var expr = primaryExpressionOrExpression();
+			var expr = expression();
 			return new ReturnControl(expr);
 		} else {
 			return null;
@@ -815,7 +815,7 @@ class Parser {
 
 			consume(TokenType.LParen, "Expected (");
 
-			var expr = primaryExpressionOrExpression();
+			var expr = expression();
 
 			consume(TokenType.RParen, "Expected ) after if condition");
 
