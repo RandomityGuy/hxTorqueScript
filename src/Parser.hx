@@ -1,5 +1,6 @@
 package;
 
+import haxe.macro.ExprTools;
 import haxe.display.Display.Package;
 import haxe.ds.GenericStack;
 import expr.Expr;
@@ -18,7 +19,1338 @@ class Parser {
 	}
 
 	public function parse() {
-		return program();
+		return start();
+	}
+
+	function start():Array<Stmt> {
+		var decls = [];
+		var d = decl();
+		while (d[0] != null) {
+			decls = decls.concat(d);
+			d = decl();
+		}
+		return decls;
+	}
+
+	function decl():Array<Stmt> {
+		var pkfuncs = packageDecl();
+		var d:Stmt = null;
+		if (pkfuncs == null)
+			d = functionDecl();
+		if (d == null)
+			d = stmt();
+
+		return pkfuncs != null ? pkfuncs.map(x -> cast x) : [d];
+	}
+
+	function packageDecl():Array<FunctionDeclStmt> {
+		if (match([TokenType.Package])) {
+			advance(); // Consume the package
+
+			var name = consume(TokenType.Label, "Expected package name");
+			consume(TokenType.LBracket, "Expected '{' before package name");
+
+			var decls = [];
+			var d = functionDecl();
+			d.packageName = name;
+			if (d == null)
+				throw new Exception("Expected function declaration");
+			while (d != null) {
+				decls.push(d);
+				d = functionDecl();
+				if (d != null)
+					d.packageName = name;
+			}
+
+			consume(TokenType.RBracket, "Expected '}' after package functions");
+			consume(TokenType.Semicolon, "Expected ';' after package block");
+
+			return decls;
+		} else {
+			return null;
+		}
+	}
+
+	function functionDecl():FunctionDeclStmt {
+		if (match([TokenType.Function])) {
+			advance();
+			var fnname = consume(TokenType.Label, "Expected function name");
+			var parentname:Token = null;
+			var parameters = [];
+
+			if (match([TokenType.DoubleColon])) {
+				advance(); // Consume the ::
+				var temp = consume(TokenType.Label, "Expected function name");
+				parentname = fnname;
+				fnname = temp;
+			}
+
+			consume(TokenType.LParen, "Expected '(' after function name");
+			var vardecl = variable();
+			while (vardecl != null) {
+				parameters.push(vardecl);
+				if (match([TokenType.Comma])) {
+					advance(); // Consume the comma
+					vardecl = variable();
+					if (vardecl == null)
+						throw new Exception("Expected variable declaration");
+				} else {
+					vardecl = null;
+				}
+			}
+
+			consume(TokenType.RParen, "Expected ')' after function parameters");
+
+			consume(TokenType.LBracket, "Expected '{' before function body");
+
+			var body = statementList();
+
+			consume(TokenType.RBracket, "Expected '}' after function body");
+
+			return new FunctionDeclStmt(fnname, parameters, body, parentname);
+		} else {
+			return null;
+		}
+	}
+
+	function statementList():Array<Stmt> {
+		var stmts = [];
+		var s = stmt();
+		while (s != null) {
+			stmts.push(s);
+			s = stmt();
+		}
+		return stmts;
+	}
+
+	function variable():VarExpr {
+		var varName = "";
+		var varType:VarType;
+
+		var varStart = [
+			TokenType.Label, TokenType.Package, TokenType.Return, TokenType.Break, TokenType.Continue, TokenType.While, TokenType.False, TokenType.True,
+			TokenType.Function, TokenType.Else, TokenType.If, TokenType.Datablock, TokenType.Case, TokenType.SpaceConcat, TokenType.TabConcat,
+			TokenType.NewlineConcat, TokenType.Default, TokenType.New
+		];
+
+		var varMid = [TokenType.DoubleColon];
+
+		var varEnd = [
+			TokenType.Label,  TokenType.Package, TokenType.Default, TokenType.Return, TokenType.Break, TokenType.Continue,     TokenType.While, TokenType.False,
+			 TokenType.True, TokenType.Function,    TokenType.Else,     TokenType.If,   TokenType.New,      TokenType.Int, TokenType.Datablock,  TokenType.Case
+		];
+
+		if (match([TokenType.Dollar, TokenType.Modulus])) {
+			var typetok = advance(); // Consume the dollar or modulus
+			varType = switch (typetok.type) {
+				case TokenType.Dollar:
+					VarType.Global;
+				case TokenType.Modulus:
+					VarType.Local;
+				default:
+					throw new Exception("Unexpected token " + typetok.type);
+			};
+
+			if (match(varStart)) {
+				varName = advance().literal;
+
+				while (match(varMid)) {
+					var tok = advance();
+					varName += switch (tok.type) {
+						case DoubleColon:
+							"::";
+						default:
+							tok.literal;
+					}
+
+					while (match(varEnd)) {
+						varName += advance().literal;
+					}
+				}
+
+				var retexpr = new VarExpr(new Token(TokenType.Label, varName, varName, typetok.line), null, varType);
+				return retexpr;
+			} else {
+				throw new Exception("Expected variable name");
+			}
+			return null;
+		} else {
+			return null;
+		}
+	}
+
+	function stmt():Stmt {
+		var e = expressionStmt();
+		if (e == null)
+			e = returnStmt();
+		if (e == null)
+			e = continueStmt();
+		if (e == null)
+			e = breakStmt();
+		if (e == null)
+			e = switchStmt();
+		if (e == null)
+			e = datablockStmt();
+		if (e == null)
+			e = forStmt();
+		if (e == null)
+			e = whileStmt();
+		if (e == null)
+			e = ifStmt();
+		return e;
+	}
+
+	function returnStmt():ReturnStmt {
+		if (match([TokenType.Return])) {
+			advance(); // Consume the return
+			if (match([TokenType.Semicolon])) {
+				advance(); // Consume the semicolon
+				return new ReturnStmt(null);
+			} else {
+				var expr = expression();
+				consume(TokenType.Semicolon, "Expected ';' after return expression");
+				return new ReturnStmt(expr);
+			}
+		} else {
+			return null;
+		}
+	}
+
+	function continueStmt():ContinueStmt {
+		if (match([TokenType.Continue])) {
+			advance(); // Consume the continue
+			consume(TokenType.Semicolon, "Expected ';' after continue");
+			return new ContinueStmt();
+		} else {
+			return null;
+		}
+	}
+
+	function breakStmt():BreakStmt {
+		if (match([TokenType.Break])) {
+			advance(); // Consume the break
+			consume(TokenType.Semicolon, "Expected ';' after break");
+			return new BreakStmt();
+		} else {
+			return null;
+		}
+	}
+
+	function switchStmt():IfStmt {
+		if (match([TokenType.Switch])) {
+			advance();
+			var isStringSwitch = false;
+			if (match([TokenType.Dollar])) {
+				advance();
+				isStringSwitch = true;
+			}
+
+			consume(TokenType.LParen, "Expected '(' after switch");
+			var expr = expression();
+			consume(TokenType.RParen, "Expected ')' after switch expression");
+
+			consume(TokenType.LBracket, "Expected '{' before switch body");
+
+			var cases = caseBlock();
+
+			if (cases == null)
+				throw new Exception("Expected switch cases");
+
+			consume(TokenType.RBracket, "Expected '}' after switch body");
+
+			function generateCaseCheckExpr(caseData:CaseExpr) {
+				var checkExpr:Expr = null;
+				if (isStringSwitch) {
+					checkExpr = new StrEqExpr(expr, caseData.conditions[0], new Token(TokenType.StringEquals, "$=", "$=", 0));
+					caseData.conditions.shift();
+					while (caseData.conditions.length > 0) {
+						checkExpr = new IntBinaryExpr(checkExpr,
+							new StrEqExpr(expr, caseData.conditions.shift(), new Token(TokenType.StringEquals, "$=", "$=", 0)),
+							new Token(TokenType.LogicalOr, "||", "||", 0));
+					}
+					return checkExpr;
+				} else {
+					checkExpr = new IntBinaryExpr(expr, caseData.conditions[0], new Token(TokenType.Equal, "==", "==", 0));
+					caseData.conditions.shift();
+					while (caseData.conditions.length > 0) {
+						checkExpr = new IntBinaryExpr(checkExpr,
+							new IntBinaryExpr(expr, caseData.conditions.shift(), new Token(TokenType.Equal, "==", "==", 0)),
+							new Token(TokenType.LogicalOr, "||", "||", 0));
+					}
+					return checkExpr;
+				}
+			}
+
+			var ifStmt = new IfStmt(generateCaseCheckExpr(cases), cases.stmts, null);
+
+			var itrIf = ifStmt;
+			while (cases.next != null) {
+				itrIf.elseBlock = [new IfStmt(generateCaseCheckExpr(cases.next), cases.next.stmts, null)];
+				itrIf = cast itrIf.elseBlock[0];
+				cases = cases.next;
+
+				if (cases.defaultStmts != null) {
+					itrIf.elseBlock = cases.defaultStmts;
+				}
+			}
+
+			return ifStmt;
+		} else {
+			return null;
+		}
+	}
+
+	function caseBlock():CaseExpr {
+		if (match([TokenType.Case])) {
+			advance();
+			var caseExprs = [];
+			var caseExpr = expression();
+			while (caseExpr != null) {
+				caseExprs.push(caseExpr);
+				if (match([TokenType.Or])) {
+					advance();
+					caseExpr = expression();
+				} else {
+					break;
+				}
+			}
+			consume(TokenType.Colon, "Expected ':' after case expression");
+
+			var stmtList = statementList();
+
+			var nextCase = caseBlock();
+
+			if (nextCase == null) {
+				var defExprs:Array<Stmt> = null;
+				if (match([TokenType.Default])) {
+					advance();
+					consume(TokenType.Colon, "Expected ':' after default");
+					defExprs = statementList();
+				}
+
+				return {
+					conditions: caseExprs,
+					stmts: stmtList,
+					defaultStmts: defExprs,
+					next: null
+				};
+			} else {
+				return {
+					conditions: caseExprs,
+					stmts: stmtList,
+					defaultStmts: null,
+					next: nextCase
+				};
+			}
+		} else {
+			return null;
+		}
+	}
+
+	function datablockStmt():ObjectDeclExpr {
+		if (match([TokenType.Datablock])) {
+			advance(); // Consume the datablock
+			var className = consume(TokenType.Label, "Expected identifier after datablock");
+
+			consume(TokenType.LParen, "Expected '(' after datablock name");
+			var name = consume(TokenType.Label, "Expected identifier after datablock name");
+			var parentName:Token = null;
+			if (match([TokenType.Colon])) {
+				advance();
+				parentName = consume(TokenType.Label, "Expected identifier after datablock name");
+			}
+			consume(TokenType.RParen, "Expected ')' after datablock name");
+
+			consume(TokenType.LBracket, "Expected '{' before datablock body");
+
+			var slots = [];
+			var slot = slotAssign();
+			if (slot == null)
+				throw new Exception("Expected slot assignment");
+
+			while (slot != null) {
+				slots.push(slot);
+				slot = slotAssign();
+			}
+
+			consume(TokenType.RBracket, "Expected '}' after datablock body");
+			consume(TokenType.Semicolon, "Expected ';' after datablock body");
+
+			var dbdecl = new ObjectDeclExpr(new ConstantExpr(name), parentName, new ConstantExpr(name), null, slots, null);
+			dbdecl.structDecl = true;
+			return dbdecl;
+		} else {
+			return null;
+		}
+	}
+
+	function slotAssign():SlotAssignExpr {
+		if (match([TokenType.Label])) {
+			var slotName = consume(TokenType.Label, "Expected identifier after slot assignment");
+
+			var arrayIdx:Array<Expr> = null;
+			if (match([TokenType.LeftSquareBracket])) {
+				advance();
+				arrayIdx = [];
+				var arrayExpr = expression();
+				if (arrayExpr == null) {
+					throw new Exception("Expected expression after '['");
+				}
+				while (arrayExpr != null) {
+					arrayIdx.push(arrayExpr);
+					if (match([TokenType.Comma])) {
+						advance();
+						arrayExpr = expression();
+					} else {
+						break;
+					}
+				}
+				consume(TokenType.RightSquareBracket, "Expected ']' after array index");
+			}
+
+			consume(TokenType.Assign, "Expected '=' after slot assignment");
+			var slotExpr = expression();
+			if (slotExpr == null) {
+				throw new Exception("Expected expression after '='");
+			}
+			consume(TokenType.Semicolon, "Expected ';' after slot assignment");
+			return new SlotAssignExpr(null, arrayIdx, slotName, slotExpr);
+		} else if (match([TokenType.Datablock])) {
+			var slotName = advance();
+
+			consume(TokenType.Assign, "Expected '=' after slot assignment");
+
+			var slotExpr = expression();
+			if (slotExpr == null) {
+				throw new Exception("Expected expression after '='");
+			}
+			consume(TokenType.Semicolon, "Expected ';' after slot assignment");
+			return new SlotAssignExpr(null, null, slotName, slotExpr);
+		} else {
+			return null;
+		}
+	}
+
+	function forStmt():LoopStmt {
+		if (match([TokenType.For])) {
+			advance();
+			consume(TokenType.LParen, "Expected '(' after 'for'");
+			var initExpr = expression();
+			consume(TokenType.Semicolon, "Expected ';' after initializer in for loop");
+			var condExpr = expression();
+			consume(TokenType.Semicolon, "Expected ';' after condition in for loop");
+			var iterExpr = expression();
+			consume(TokenType.RParen, "Expected ')' after iteration in for loop");
+
+			var body = [];
+			if (match([TokenType.LBracket])) {
+				advance();
+				body = statementList();
+				consume(TokenType.RBracket, "Expected '}' after for loop body");
+			} else
+				body = [stmt()];
+
+			return new LoopStmt(condExpr, initExpr, iterExpr, body);
+		} else {
+			return null;
+		}
+	}
+
+	function whileStmt():LoopStmt {
+		if (match([TokenType.While])) {
+			advance();
+			consume(TokenType.LParen, "Expected '(' after 'while'");
+			var condExpr = expression();
+			consume(TokenType.RParen, "Expected ')' after condition in while loop");
+
+			var body = [];
+			if (match([TokenType.LBracket])) {
+				advance();
+				body = statementList();
+				consume(TokenType.RBracket, "Expected '}' after for loop body");
+			} else
+				body = [stmt()];
+
+			return new LoopStmt(condExpr, null, null, body);
+		} else {
+			return null;
+		}
+	}
+
+	function ifStmt():IfStmt {
+		if (match([TokenType.If])) {
+			advance();
+			consume(TokenType.LParen, "Expected '(' after 'if'");
+			var condExpr = expression();
+			consume(TokenType.RParen, "Expected ')' after condition in if statement");
+
+			var body = [];
+			if (match([TokenType.LBracket])) {
+				advance();
+				body = statementList();
+				consume(TokenType.RBracket, "Expected '}' after if statement body");
+			} else
+				body = [stmt()];
+
+			var elseBody:Array<Stmt> = null;
+			if (match([TokenType.Else])) {
+				advance();
+				if (match([TokenType.LBracket])) {
+					advance();
+					elseBody = statementList();
+					consume(TokenType.RBracket, "Expected '}' after else statement body");
+				} else
+					elseBody = [stmt()];
+			}
+
+			return new IfStmt(condExpr, body, elseBody);
+		} else {
+			return null;
+		}
+	}
+
+	function expressionStmt():Stmt {
+		var exprstmt = stmtExpr();
+		if (exprstmt != null)
+			consume(TokenType.Semicolon, "Expected ';' after expression statement");
+		return exprstmt;
+	}
+
+	function stmtExpr():Expr {
+		var curPos = current;
+
+		var expr = expression();
+		if (expr != null) {
+			if (match([TokenType.Dot])) {
+				advance();
+				var labelAccess = consume(TokenType.Label, "Expected label after expression");
+				var arrAccess:Array<Expr> = null;
+				if (match([TokenType.LeftSquareBracket])) {
+					advance();
+					arrAccess = [];
+					var arrExpr = expression();
+					if (arrExpr == null) {
+						throw new Exception("Expected expression after '['");
+					}
+					while (arrExpr != null) {
+						arrAccess.push(arrExpr);
+						if (match([TokenType.Comma])) {
+							advance();
+							arrExpr = expression();
+						} else {
+							break;
+						}
+					}
+
+					consume(TokenType.RightSquareBracket, "Expected ']' after array index");
+				}
+
+				var nextTok = advance();
+
+				switch (nextTok.type) {
+					case TokenType.Assign:
+						var rexpr = expression();
+						return new SlotAssignExpr(expr, arrAccess, labelAccess, rexpr);
+
+					case TokenType.ShiftRightAssign | TokenType.OrAssign | TokenType.XorAssign | TokenType.AndAssign | TokenType.ModulusAssign | TokenType.DivideAssign | TokenType.MultiplyAssign | TokenType.MinusAssign | TokenType.PlusAssign:
+						var rexpr = expression();
+						return new SlotAssignOpExpr(expr, arrAccess, labelAccess, rexpr, nextTok);
+
+					case TokenType.PlusPlus | TokenType.MinusMinus:
+						return new SlotAssignOpExpr(expr, arrAccess, labelAccess, null, nextTok);
+
+					case LParen:
+						if (arrAccess == null) {
+							var funcexprs = [expr];
+							var funcexpr = expression();
+							while (funcexpr != null) {
+								funcexprs.push(funcexpr);
+								if (match([TokenType.Comma])) {
+									advance();
+									funcexpr = expression();
+								} else {
+									break;
+								}
+							}
+							consume(RParen, "Expected ')' after function call arguments");
+
+							return new FuncCallExpr(labelAccess, null, funcexprs);
+						} else {
+							throw new Exception("Cannot call array methods with a dot notation accessor");
+						}
+
+					default:
+						current = curPos;
+						return null;
+				}
+			} else if (Std.isOfType(expr, VarExpr)) {
+				var varExpr:VarExpr = cast expr;
+				var arrAccess:Array<Expr> = null;
+				if (match([TokenType.LeftSquareBracket])) {
+					advance();
+					arrAccess = [];
+					var arrExpr = expression();
+					if (arrExpr == null) {
+						throw new Exception("Expected expression after '['");
+					}
+					while (arrExpr != null) {
+						arrAccess.push(arrExpr);
+						if (match([TokenType.Comma])) {
+							advance();
+							arrExpr = expression();
+						} else {
+							break;
+						}
+					}
+
+					consume(TokenType.RightSquareBracket, "Expected ']' after array index");
+				}
+
+				var nextTok = advance();
+
+				switch (nextTok.type) {
+					case TokenType.ShiftRightAssign | TokenType.OrAssign | TokenType.XorAssign | TokenType.AndAssign | TokenType.ModulusAssign | TokenType.DivideAssign | TokenType.MultiplyAssign | TokenType.MinusAssign | TokenType.PlusAssign:
+						var rexpr = expression();
+						return new AssignOpExpr(varExpr, rexpr, nextTok);
+
+					case TokenType.PlusPlus | TokenType.MinusMinus:
+						return new AssignOpExpr(varExpr, null, nextTok);
+
+					case TokenType.Assign:
+						var rexpr = expression();
+						return new AssignExpr(varExpr, rexpr);
+
+					default:
+						current = curPos;
+						return null;
+				}
+			} else {
+				return expr;
+			}
+		} else {
+			var varExpr = variable();
+			if (varExpr != null) {
+				var arrAccess:Array<Expr> = null;
+				if (match([TokenType.LeftSquareBracket])) {
+					advance();
+					arrAccess = [];
+					var arrExpr = expression();
+					if (arrExpr == null) {
+						throw new Exception("Expected expression after '['");
+					}
+					while (arrExpr != null) {
+						arrAccess.push(arrExpr);
+						if (match([TokenType.Comma])) {
+							advance();
+							arrExpr = expression();
+						} else {
+							break;
+						}
+					}
+
+					consume(TokenType.RightSquareBracket, "Expected ']' after array index");
+				}
+
+				var nextTok = advance();
+
+				switch (nextTok.type) {
+					case TokenType.ShiftRightAssign | TokenType.OrAssign | TokenType.XorAssign | TokenType.AndAssign | TokenType.ModulusAssign | TokenType.DivideAssign | TokenType.MultiplyAssign | TokenType.MinusAssign | TokenType.PlusAssign:
+						var rexpr = expression();
+						return new AssignOpExpr(varExpr, rexpr, nextTok);
+
+					case TokenType.PlusPlus | TokenType.MinusMinus:
+						return new AssignOpExpr(varExpr, null, nextTok);
+
+					case TokenType.Assign:
+						var rexpr = expression();
+						return new AssignExpr(varExpr, rexpr);
+
+					default:
+						current = curPos;
+						return null;
+				}
+			} else {
+				var objD = objectDecl();
+				if (objD != null)
+					return objD;
+				else {
+					if (match([TokenType.Label])) {
+						var funcname = consume(TokenType.Label, "Expected any expression statement");
+						var parentname = null;
+						if (match([TokenType.DoubleColon])) {
+							var temp = consume(TokenType.Label, "Expected function name");
+							parentname = funcname;
+							funcname = temp;
+						}
+
+						consume(TokenType.LParen, "Expected parenthesis after function name");
+						var funcexprs = [];
+						var funcexpr = expression();
+						while (funcexpr != null) {
+							funcexprs.push(funcexpr);
+							if (match([TokenType.Comma])) {
+								advance();
+								funcexpr = expression();
+							} else {
+								break;
+							}
+						}
+						consume(TokenType.RParen, "Expected ')' after function parameters");
+						return new FuncCallExpr(funcname, parentname, funcexprs);
+					} else {
+						return null;
+					}
+				}
+			}
+		}
+	}
+
+	function objectDecl():ObjectDeclExpr {
+		if (match([TokenType.New])) {
+			advance();
+			var classNameExpr:Expr = null;
+			if (match([TokenType.LParen])) {
+				advance();
+				classNameExpr = expression();
+				consume(TokenType.RParen, "Expected ')' after class name");
+			} else
+				classNameExpr = new ConstantExpr(consume(TokenType.Label, "Expected class name"));
+
+			consume(TokenType.LParen, "Expected '(' after class name");
+
+			var objNameExpr:Expr = null;
+			var parentObj:Token = null;
+			var objArgs:Array<Expr> = null;
+			if (!match([TokenType.RParen])) {
+				objNameExpr = expression();
+				if (match([TokenType.Colon])) {
+					advance();
+					parentObj = consume(TokenType.Label, "Expected parent object name");
+				}
+
+				if (match([TokenType.Comma])) {
+					objArgs = [];
+					var objArg = expression();
+					while (objArg != null) {
+						objArgs.push(objArg);
+						if (match([TokenType.Comma])) {
+							advance();
+							objArg = expression();
+						} else {
+							break;
+						}
+					}
+				}
+
+				consume(TokenType.RParen, "Expected ')' after object parameters");
+			} else {
+				advance(); // Consume the ')'
+			}
+
+			if (match([TokenType.LBracket])) {
+				advance();
+
+				var slotAssigns = [];
+				var sa = slotAssign();
+				while (sa != null) {
+					slotAssigns.push(sa);
+					sa = slotAssign();
+				}
+
+				var subObjects = [];
+				var so = objectDecl();
+				if (so != null)
+					consume(TokenType.Semicolon, "Expected ';' after object declaration");
+				while (so != null) {
+					subObjects.push(so);
+					so = objectDecl();
+					if (so != null)
+						consume(TokenType.Semicolon, "Expected ';' after object declaration");
+				}
+
+				consume(TokenType.RBracket, "Expected '}'");
+
+				return new ObjectDeclExpr(classNameExpr, parentObj, objNameExpr, objArgs, slotAssigns, subObjects);
+			} else {
+				return new ObjectDeclExpr(classNameExpr, parentObj, objNameExpr, objArgs, null, null);
+			}
+			return null;
+		} else {
+			return null;
+		}
+	}
+
+	function expression():Expr {
+		function primaryExpr():Expr {
+			if (match([TokenType.LParen])) {
+				advance();
+				var subexpr = expression();
+				consume(TokenType.RParen, "Expected ')' after expression");
+				return subexpr;
+			} else if (match([TokenType.Minus])) {
+				var tok = advance();
+				var subexpr = expression();
+				return new FloatUnaryExpr(subexpr, tok);
+			} else if (match([TokenType.Not, TokenType.Tilde])) {
+				var tok = advance();
+				var subexpr = expression();
+				return new IntUnaryExpr(subexpr, tok);
+			} else if (match([TokenType.Modulus, TokenType.Dollar])) {
+				var varExpr = variable();
+				var varIdx:Array<Expr> = null;
+				if (match([TokenType.LeftSquareBracket])) {
+					advance();
+					varIdx = [];
+					var arrExpr = expression();
+					if (arrExpr == null)
+						throw new Exception("Expected array index");
+
+					while (arrExpr != null) {
+						varIdx.push(arrExpr);
+						if (match([TokenType.Comma])) {
+							advance();
+							arrExpr = expression();
+						} else {
+							break;
+						}
+					}
+
+					consume(TokenType.RightSquareBracket, "Expected ']' after array index");
+				}
+
+				varExpr.arrayIndex = varIdx;
+				return varExpr;
+			} else if (match([TokenType.String])) {
+				var str = advance();
+				return new StringConstExpr(str.literal, false);
+			} else if (match([TokenType.TaggedString])) {
+				var str = advance();
+				return new StringConstExpr(str.literal, true);
+			} else if (match([TokenType.Label, TokenType.Break])) {
+				var label = advance();
+				return new ConstantExpr(label);
+			} else if (match([TokenType.Int])) {
+				var intTok = advance();
+				return new IntExpr(Std.parseInt(intTok.literal));
+			} else if (match([TokenType.Float])) {
+				var floatTok = advance();
+				return new FloatExpr(Std.parseFloat(floatTok.literal));
+			} else if (match([TokenType.True])) {
+				advance();
+				return new IntExpr(1);
+			} else if (match([TokenType.False])) {
+				advance();
+				return new IntExpr(0);
+			} else
+				return null;
+		}
+
+		function chainExpr():Expr {
+			var expr = primaryExpr();
+
+			var chExpr:Expr = null;
+
+			if (expr != null) {
+				if (match([TokenType.Dot])) {
+					advance();
+					var labelAccess = consume(TokenType.Label, "Expected label after expression");
+					var arrAccess:Array<Expr> = null;
+					if (match([TokenType.LeftSquareBracket])) {
+						advance();
+						arrAccess = [];
+						var arrExpr = expression();
+						if (arrExpr == null) {
+							throw new Exception("Expected expression after '['");
+						}
+						while (arrExpr != null) {
+							arrAccess.push(arrExpr);
+							if (match([TokenType.Comma])) {
+								advance();
+								arrExpr = expression();
+							} else {
+								break;
+							}
+						}
+
+						consume(TokenType.RightSquareBracket, "Expected ']' after array index");
+					}
+
+					var nextTok = peek();
+					switch (nextTok.type) {
+						case TokenType.Assign:
+							advance();
+							var rexpr = chainExpr();
+							chExpr = new SlotAssignExpr(expr, arrAccess, labelAccess, rexpr);
+
+						case TokenType.ShiftRightAssign | TokenType.OrAssign | TokenType.XorAssign | TokenType.AndAssign | TokenType.ModulusAssign | TokenType.DivideAssign | TokenType.MultiplyAssign | TokenType.MinusAssign | TokenType.PlusAssign:
+							advance();
+							var rexpr = chainExpr();
+							chExpr = new SlotAssignOpExpr(expr, arrAccess, labelAccess, rexpr, nextTok);
+
+						case TokenType.PlusPlus | TokenType.MinusMinus:
+							advance();
+							chExpr = new SlotAssignOpExpr(expr, arrAccess, labelAccess, null, nextTok);
+
+						case LParen:
+							advance();
+							if (arrAccess == null) {
+								var funcexprs = [expr];
+								var funcexpr = expression();
+								while (funcexpr != null) {
+									funcexprs.push(funcexpr);
+									if (match([TokenType.Comma])) {
+										advance();
+										funcexpr = expression();
+									} else {
+										break;
+									}
+								}
+								consume(RParen, "Expected ')' after function call arguments");
+
+								chExpr = new FuncCallExpr(labelAccess, null, funcexprs);
+							} else {
+								throw new Exception("Cannot call array methods with a dot notation accessor");
+							}
+
+						default:
+							chExpr = new SlotAccessExpr(expr, arrAccess, labelAccess);
+					}
+				} else if (Std.isOfType(expr, VarExpr)) {
+					var varExpr:VarExpr = cast expr;
+					var arrAccess:Array<Expr> = null;
+					if (match([TokenType.LeftSquareBracket])) {
+						advance();
+						arrAccess = [];
+						var arrExpr = expression();
+						if (arrExpr == null) {
+							throw new Exception("Expected expression after '['");
+						}
+						while (arrExpr != null) {
+							arrAccess.push(arrExpr);
+							if (match([TokenType.Comma])) {
+								advance();
+								arrExpr = expression();
+							} else {
+								break;
+							}
+						}
+
+						consume(TokenType.RightSquareBracket, "Expected ']' after array index");
+					}
+
+					var nextTok = peek();
+
+					switch (nextTok.type) {
+						case TokenType.ShiftRightAssign | TokenType.OrAssign | TokenType.XorAssign | TokenType.AndAssign | TokenType.ModulusAssign | TokenType.DivideAssign | TokenType.MultiplyAssign | TokenType.MinusAssign | TokenType.PlusAssign:
+							advance();
+							var rexpr = chainExpr();
+							chExpr = new AssignOpExpr(varExpr, rexpr, nextTok);
+
+						case TokenType.PlusPlus | TokenType.MinusMinus:
+							advance();
+							chExpr = new AssignOpExpr(varExpr, null, nextTok);
+
+						case TokenType.Assign:
+							advance();
+							var rexpr = chainExpr();
+							chExpr = new AssignExpr(varExpr, rexpr);
+
+						default:
+							varExpr.arrayIndex = arrAccess;
+							chExpr = varExpr;
+					}
+				} else if (Std.isOfType(expr, ConstantExpr)) {
+					if (match([TokenType.LParen])) {
+						advance();
+
+						var fnname = cast(expr, ConstantExpr).name;
+
+						var fnArgs = [];
+						var fnArg = expression();
+						while (fnArg != null) {
+							fnArgs.push(fnArg);
+							if (match([TokenType.Comma])) {
+								advance();
+								fnArg = expression();
+							} else {
+								break;
+							}
+						}
+
+						consume(TokenType.RParen, "Expected ')' after constant function arguments");
+
+						chExpr = new FuncCallExpr(fnname, null, fnArgs);
+					} else if (match([TokenType.DoubleColon])) {
+						advance();
+						var parentname = cast(expr, ConstantExpr).name;
+						var fnname = consume(TokenType.Label, "Expected a function name after '::'");
+
+						consume(TokenType.LParen, "Expected '(' after constant function name");
+						var fnArgs = [];
+						var fnArg = expression();
+						while (fnArg != null) {
+							fnArgs.push(fnArg);
+							if (match([TokenType.Comma])) {
+								advance();
+								fnArg = expression();
+							} else {
+								break;
+							}
+						}
+
+						consume(TokenType.RParen, "Expected ')' after constant function arguments");
+
+						chExpr = new FuncCallExpr(fnname, parentname, fnArgs);
+					} else
+						chExpr = expr;
+				} else {
+					chExpr = expr;
+				}
+			} else {
+				var objD = objectDecl();
+				if (objD != null)
+					chExpr = objD;
+				else {
+					return null;
+				}
+			}
+
+			while (match([TokenType.Dot])) {
+				advance();
+				var label = consume(TokenType.Label, "Expected a property name after '.'");
+				if (match([TokenType.LParen])) {
+					advance();
+					var fnArgs = [chExpr];
+					var fnArg = expression();
+					while (fnArg != null) {
+						fnArgs.push(fnArg);
+						if (match([TokenType.Comma])) {
+							advance();
+							fnArg = expression();
+						} else {
+							break;
+						}
+					}
+
+					consume(TokenType.RParen, "Expected ')' after function arguments");
+
+					chExpr = new FuncCallExpr(label, null, fnArgs);
+				} else {
+					var arrAccess:Array<Expr> = null;
+					if (match([TokenType.LeftSquareBracket])) {
+						advance();
+						arrAccess = [];
+						var arrExpr = expression();
+						if (arrExpr == null) {
+							throw new Exception("Expected expression after '['");
+						}
+						while (arrExpr != null) {
+							arrAccess.push(arrExpr);
+							if (match([TokenType.Comma])) {
+								advance();
+								arrExpr = expression();
+							} else {
+								break;
+							}
+						}
+
+						consume(TokenType.RightSquareBracket, "Expected ']' after array index");
+					}
+
+					var nextTok = peek();
+					switch (nextTok.type) {
+						case TokenType.Assign:
+							advance();
+							var rexpr = chainExpr();
+							chExpr = new SlotAssignExpr(chExpr, arrAccess, label, rexpr);
+
+						case TokenType.ShiftRightAssign | TokenType.OrAssign | TokenType.XorAssign | TokenType.AndAssign | TokenType.ModulusAssign | TokenType.DivideAssign | TokenType.MultiplyAssign | TokenType.MinusAssign | TokenType.PlusAssign:
+							advance();
+							var rexpr = chainExpr();
+							chExpr = new SlotAssignOpExpr(chExpr, arrAccess, label, rexpr, nextTok);
+
+						case TokenType.PlusPlus | TokenType.MinusMinus:
+							advance();
+							chExpr = new SlotAssignOpExpr(chExpr, arrAccess, label, null, nextTok);
+
+						default:
+							chExpr = new SlotAccessExpr(chExpr, arrAccess, label);
+					}
+				}
+			}
+
+			return chExpr;
+		}
+
+		function bitwiseExp():Expr {
+			var lhs = chainExpr();
+			if (match([
+				TokenType.BitwiseAnd,
+				TokenType.BitwiseOr,
+				TokenType.BitwiseXor,
+				TokenType.Modulus
+			])) {
+				var op = advance(); // Consume the bitwise operator
+				var rhs = chainExpr();
+				if (rhs == null)
+					throw new Exception("Expected expression after bitwise operator");
+
+				rhs = new IntBinaryExpr(lhs, rhs, op);
+
+				while (match([
+					TokenType.BitwiseAnd,
+					TokenType.BitwiseOr,
+					TokenType.BitwiseXor,
+					TokenType.Modulus
+				])) {
+					var op2 = advance(); // Consume the bitwise operator
+					var rhs2 = chainExpr();
+					if (rhs2 == null)
+						throw new Exception("Expected expression after bitwise operator");
+
+					rhs = new IntBinaryExpr(rhs, rhs2, op2);
+				}
+
+				return rhs;
+			} else {
+				return lhs;
+			}
+		}
+
+		function factorExp():Expr {
+			var lhs = bitwiseExp();
+
+			if (match([TokenType.Multiply, TokenType.Divide])) {
+				var op = advance(); // Consume the operator
+				var rhs = bitwiseExp();
+				if (rhs == null)
+					throw new Exception("Expected rhs after bitwise operator");
+
+				rhs = new FloatBinaryExpr(lhs, rhs, op);
+
+				while (match([TokenType.Multiply, TokenType.Divide])) {
+					var op2 = advance(); // Consume the operator
+					var rhs2 = bitwiseExp();
+					if (rhs2 == null)
+						throw new Exception("Expected rhs after bitwise operator");
+
+					rhs = new FloatBinaryExpr(rhs, rhs2, op2);
+				}
+
+				return rhs;
+			} else {
+				return lhs;
+			}
+		}
+
+		function termExp():Expr {
+			var lhs = factorExp();
+
+			if (match([TokenType.Plus, TokenType.Minus])) {
+				var op = advance(); // Consume the plus/minus operator
+				var rhs = termExp();
+				if (rhs == null)
+					throw new Exception("Expected expression after plus/minus operator");
+				rhs = new FloatBinaryExpr(lhs, rhs, op);
+
+				while (match([TokenType.Plus, TokenType.Minus])) {
+					var op2 = advance(); // Consume the plus/minus operator
+					var rhs2 = termExp();
+					if (rhs2 == null)
+						throw new Exception("Expected expression after plus/minus operator");
+					rhs = new FloatBinaryExpr(rhs, rhs2, op2);
+				}
+
+				return rhs;
+			} else {
+				return lhs;
+			}
+		}
+
+		function ternaryExp():Expr {
+			var lhs = termExp();
+
+			if (match([TokenType.QuestionMark])) {
+				advance();
+				var trueExpr = expression();
+				if (trueExpr == null)
+					throw new Exception("Expected true expression");
+				consume(TokenType.Colon, "Expected : after true expression");
+				var falseExpr = expression();
+				if (falseExpr == null)
+					throw new Exception("Expected false expression");
+				return new ConditionalExpr(lhs, trueExpr, falseExpr);
+			} else {
+				return lhs;
+			}
+		}
+
+		function relationalExp():Expr {
+			var lhs = ternaryExp();
+			if (match([
+				TokenType.LessThan,
+				TokenType.GreaterThan,
+				TokenType.LessThanEqual,
+				TokenType.GreaterThanEqual
+			])) {
+				var op = advance();
+				var rhs = ternaryExp();
+				if (rhs == null)
+					throw new Exception("Expected right hand side");
+
+				rhs = new IntBinaryExpr(lhs, rhs, op);
+
+				while (match([
+					TokenType.LessThan,
+					TokenType.GreaterThan,
+					TokenType.LessThanEqual,
+					TokenType.GreaterThanEqual
+				])) {
+					var op2 = advance();
+					var rhs2 = ternaryExp();
+					if (rhs2 == null)
+						throw new Exception("Expected right hand side");
+					rhs = new IntBinaryExpr(rhs, rhs2, op2);
+				}
+
+				return rhs;
+			} else {
+				return lhs;
+			}
+		}
+
+		function bitshiftExp():Expr {
+			var lhs = relationalExp();
+			if (match([TokenType.LeftBitShift, TokenType.RightBitShift])) {
+				var op = advance();
+				var rhs = relationalExp();
+				if (rhs == null)
+					throw new Exception("Expected right hand side");
+
+				rhs = new IntBinaryExpr(lhs, rhs, op);
+
+				while (match([TokenType.LeftBitShift, TokenType.RightBitShift])) {
+					var op2 = advance();
+					var rhs2 = relationalExp();
+					if (rhs2 == null)
+						throw new Exception("Expected right hand side");
+					rhs = new IntBinaryExpr(rhs, rhs2, op2);
+				}
+
+				return rhs;
+			} else
+				return lhs;
+		}
+
+		function logicalExp():Expr {
+			var lhs = bitshiftExp();
+			if (match([TokenType.LogicalAnd, TokenType.LogicalOr])) {
+				var op = advance();
+				var rhs = bitshiftExp();
+				if (rhs == null)
+					throw new Exception("Expected right hand side");
+
+				rhs = new IntBinaryExpr(lhs, rhs, op);
+
+				while (match([TokenType.LogicalAnd, TokenType.LogicalOr])) {
+					var op2 = advance();
+					var rhs2 = bitshiftExp();
+					if (rhs2 == null)
+						throw new Exception("Expected right hand side");
+					rhs = new IntBinaryExpr(rhs, rhs2, op2);
+				}
+
+				return rhs;
+			} else
+				return lhs;
+		}
+
+		function equalityExp():Expr {
+			var lhs = logicalExp();
+
+			if (match([
+				TokenType.Equal,
+				TokenType.NotEqual,
+				TokenType.StringEquals,
+				TokenType.StringNotEquals
+			])) {
+				var op = advance();
+				var rhs = logicalExp();
+				if (rhs == null)
+					throw new Exception("Expected right hand side");
+
+				rhs = switch (op.type) {
+					case TokenType.Equal | TokenType.NotEqual:
+						new IntBinaryExpr(lhs, rhs, op);
+
+					case TokenType.StringEquals | TokenType.StringNotEquals:
+						new StrEqExpr(lhs, rhs, op);
+
+					default:
+						null;
+				}
+
+				while (match([
+					TokenType.Equal,
+					TokenType.NotEqual,
+					TokenType.StringEquals,
+					TokenType.StringNotEquals
+				])) {
+					var op2 = advance();
+					var rhs2 = logicalExp();
+					if (rhs2 == null)
+						throw new Exception("Expected right hand side");
+					rhs = switch (op.type) {
+						case TokenType.Equal | TokenType.NotEqual:
+							new IntBinaryExpr(rhs, rhs2, op);
+
+						case TokenType.StringEquals | TokenType.StringNotEquals:
+							new StrEqExpr(rhs, rhs2, op);
+
+						default:
+							null;
+					}
+				}
+
+				return rhs;
+			} else
+				return lhs;
+		}
+
+		function concatExp():Expr {
+			var lhs = equalityExp();
+
+			if (match([
+				TokenType.Concat,
+				TokenType.TabConcat,
+				TokenType.SpaceConcat,
+				TokenType.NewlineConcat
+			])) {
+				var op = advance();
+				var rhs = equalityExp();
+				if (rhs == null)
+					throw new Exception("Expected right hand side");
+				rhs = new StrCatExpr(lhs, rhs, op);
+
+				while (match([
+					TokenType.Concat,
+					TokenType.TabConcat,
+					TokenType.SpaceConcat,
+					TokenType.NewlineConcat
+				])) {
+					var op2 = advance();
+					var rhs2 = equalityExp();
+					if (rhs2 == null)
+						throw new Exception("Expected right hand side");
+					rhs = new StrCatExpr(rhs, rhs2, op2);
+				}
+
+				return rhs;
+			} else
+				return lhs;
+		}
+
+		return concatExp();
 	}
 
 	function isAtEnd() {
@@ -37,1444 +1369,6 @@ class Parser {
 		if (!isAtEnd())
 			current++;
 		return tokens[current - 1];
-	}
-
-	function program() {
-		var statements:Array<Expr> = [];
-
-		if (peek().type != TokenType.Eof) {
-			while (!isAtEnd()) {
-				var stmt = statement();
-				if (stmt == null)
-					throw new Exception("Failed to parse statement");
-				statements.push(stmt);
-			}
-		}
-		return statements;
-	}
-
-	function statement() {
-		var stmt:Expr = functionDeclaration();
-		if (stmt == null)
-			stmt = packageDeclaration();
-		if (stmt == null)
-			stmt = expressionStatement();
-		return stmt;
-	}
-
-	function functionDeclaration():FunctionDeclaration {
-		if (match([TokenType.Function])) {
-			advance(); // Consume `function`
-			var l1 = label();
-			if (l1 == null) {
-				throw new Exception("Expected function name");
-			}
-
-			if (match([TokenType.LParen])) {
-				advance(); // Consume `(`
-				var parameters = functionDeclarationParameters();
-				consume(TokenType.RParen, "Expected ) after function declaration parameters");
-				consume(TokenType.LBracket, "Expected { after function declaration");
-
-				var exprs = [];
-
-				var expr = expressionStatement();
-				while (expr != null) {
-					exprs.push(expr);
-					expr = expressionStatement();
-				}
-
-				consume(TokenType.RBracket, "Expected } after function body");
-
-				var functionDeclarationExpr = new FunctionDeclaration(null, l1, parameters, exprs);
-				return functionDeclarationExpr;
-			} else if (match([TokenType.DoubleColon])) {
-				advance(); // Consume the colons
-				var sublabel = label();
-				if (sublabel == null) {
-					throw new Exception("Expected label after ::");
-				}
-
-				if (match([TokenType.LParen])) {
-					advance(); // Consume `(`
-					var parameters = functionDeclarationParameters();
-					consume(TokenType.RParen, "Expected ) after function declaration parameters");
-					consume(TokenType.LBracket, "Expected { after function declaration");
-
-					var exprs = [];
-					var expr = expressionStatement();
-					while (expr != null) {
-						exprs.push(expr);
-						expr = expressionStatement();
-					}
-
-					consume(TokenType.RBracket, "Expected } after function body");
-
-					var functionDeclarationExpr = new FunctionDeclaration(l1, sublabel, parameters, exprs);
-					return functionDeclarationExpr;
-				} else {
-					throw new Exception("Expected function declaration");
-				}
-			} else {
-				throw new Exception("Expected function signature");
-			}
-		} else {
-			return null;
-		}
-	}
-
-	function functionDeclarationParameters():Null<FunctionDeclarationParameters> {
-		var firstparam = localVariable();
-		if (firstparam == null)
-			return null;
-		else {
-			var params = [firstparam];
-			while (match([TokenType.Comma])) {
-				advance(); // Consume `,`
-				var param = localVariable();
-				if (param == null)
-					throw new Exception("Expected parameter name");
-				params.push(param);
-			}
-			return new FunctionDeclarationParameters(params);
-		}
-	}
-
-	function packageDeclaration():PackageDeclaration {
-		if (match([TokenType.Package])) {
-			advance();
-			var l1 = label();
-			if (l1 == null)
-				throw new Exception("Expected package name");
-
-			consume(TokenType.LBracket, "Expected { after package declaration");
-
-			var fnDeclrs = [];
-			var fnDeclr = functionDeclaration();
-			if (fnDeclr == null)
-				throw new Exception("Expected atleast one function in package");
-			fnDeclrs.push(fnDeclr);
-			do {
-				fnDeclr = functionDeclaration();
-				if (fnDeclr != null)
-					fnDeclrs.push(fnDeclr);
-			} while (fnDeclr != null);
-
-			consume(TokenType.RBracket, "Expected } after package body");
-			consume(TokenType.Semicolon, "Expected ; after package body");
-
-			var packageDeclr = new PackageDeclaration(l1, fnDeclrs);
-			return packageDeclr;
-		} else
-			return null;
-	}
-
-	function expressionStatement():ExprStatement {
-		var expr:ExprStatement = primaryExpression();
-		if (expr != null)
-			consume(TokenType.Semicolon, "Expected ; after expression");
-		if (expr == null)
-			expr = whileControl();
-		if (expr == null)
-			expr = forControl();
-		if (expr == null)
-			expr = ifControl();
-		if (expr == null)
-			expr = switchControl();
-		if (expr == null) {
-			expr = continueControl();
-			if (expr != null)
-				consume(TokenType.Semicolon, "Expected ; after expression");
-		}
-		if (expr == null) {
-			expr = breakControl();
-			if (expr != null)
-				consume(TokenType.Semicolon, "Expected ; after expression");
-		}
-		if (expr == null) {
-			expr = returnControl();
-			if (expr != null)
-				consume(TokenType.Semicolon, "Expected ; after expression");
-		}
-		return expr;
-	}
-
-	function returnControl():ReturnControl {
-		if (match([TokenType.Return])) {
-			advance();
-			var expr = expression();
-			return new ReturnControl(expr);
-		} else {
-			return null;
-		}
-	}
-
-	function primaryExpression():ExprStatement {
-		var curpos = current;
-		var expr:ExprStatement = primaryChain();
-		if (expr == null) {
-			current = curpos;
-			var expr2 = assignableChain();
-
-			if (expr2 == null) {
-				current = curpos;
-			} else {
-				var nextTok = peek();
-				switch (nextTok.type) {
-					case Assign, PlusAssign, MinusAssign, MultiplyAssign, DivideAssign, OrAssign, ModulusAssign, AndAssign:
-						advance();
-						var rhs = primaryExpressionOrExpression();
-						return new AssignmentExpr(nextTok, expr2, rhs);
-
-					case PlusPlus, MinusMinus:
-						advance();
-						if (match([
-							TokenType.BitwiseXor, TokenType.BitwiseOr, TokenType.BitwiseAnd, TokenType.Modulus, TokenType.Multiply, TokenType.Divide,
-							TokenType.Plus, TokenType.Minus, TokenType.QuestionMark, TokenType.LessThan, TokenType.GreaterThan, TokenType.GreaterThanEqual,
-							TokenType.LessThanEqual, TokenType.LeftBitShift, TokenType.RightBitShift, TokenType.LogicalAnd, TokenType.LogicalOr,
-							TokenType.Equal, TokenType.NotEqual, TokenType.StringEquals, TokenType.StringNotEquals, TokenType.Concat, TokenType.SpaceConcat,
-							TokenType.TabConcat, TokenType.NewlineConcat, TokenType.Dot
-						])) {
-							current = curpos;
-							expr = null;
-						} else
-							return new PostfixExpr(nextTok, expr2);
-
-					default:
-						current = curpos;
-				}
-			}
-		}
-		if (expr == null) {
-			expr = objectDeclaration();
-		}
-		if (expr == null) {
-			expr = datablockDeclaration();
-		}
-
-		return expr;
-	}
-
-	function primaryChain():ExprStatement {
-		var curPos = current;
-
-		var l1 = label();
-		if (l1 != null) {
-			if (match([TokenType.LParen])) {
-				advance();
-				var exprs = [];
-				if (!match([TokenType.RParen])) {
-					var expr = primaryExpressionOrExpression();
-					while (expr != null) {
-						exprs.push(expr);
-						if (match([TokenType.Comma])) {
-							advance();
-							expr = primaryExpressionOrExpression();
-						} else {
-							expr = null;
-						}
-					}
-				}
-				consume(TokenType.RParen, "Expected ) after call");
-
-				var fncall = new FunctionCall(null, l1, exprs);
-
-				if (match([
-					TokenType.BitwiseXor, TokenType.BitwiseOr, TokenType.BitwiseAnd, TokenType.Modulus, TokenType.Multiply, TokenType.Divide, TokenType.Plus,
-					TokenType.Minus, TokenType.QuestionMark, TokenType.LessThan, TokenType.GreaterThan, TokenType.GreaterThanEqual, TokenType.LessThanEqual,
-					TokenType.LeftBitShift, TokenType.RightBitShift, TokenType.LogicalAnd, TokenType.LogicalOr, TokenType.Equal, TokenType.NotEqual,
-					TokenType.StringEquals, TokenType.StringNotEquals, TokenType.Concat, TokenType.SpaceConcat, TokenType.TabConcat, TokenType.NewlineConcat,
-					TokenType.Dot
-				])) {
-					current = curPos;
-				} else
-					return fncall;
-			} else if (match([TokenType.DoubleColon])) {
-				advance();
-				var l2 = label();
-				if (l2 == null)
-					throw new Exception("Expected function name");
-				if (match([TokenType.LParen])) {
-					advance();
-					var exprs = [];
-					if (!match([TokenType.RParen])) {
-						var expr = primaryExpressionOrExpression();
-						while (expr != null) {
-							exprs.push(expr);
-							if (match([TokenType.Comma])) {
-								advance();
-								expr = primaryExpressionOrExpression();
-							} else {
-								expr = null;
-							}
-						}
-					}
-					consume(TokenType.RParen, "Expected ) after call");
-
-					var fncall = new FunctionCall(l1, l2, exprs);
-
-					if (match([
-						TokenType.BitwiseXor, TokenType.BitwiseOr, TokenType.BitwiseAnd, TokenType.Modulus, TokenType.Multiply, TokenType.Divide,
-						TokenType.Plus, TokenType.Minus, TokenType.QuestionMark, TokenType.LessThan, TokenType.GreaterThan, TokenType.GreaterThanEqual,
-						TokenType.LessThanEqual, TokenType.LeftBitShift, TokenType.RightBitShift, TokenType.LogicalAnd, TokenType.LogicalOr, TokenType.Equal,
-						TokenType.NotEqual, TokenType.StringEquals, TokenType.StringNotEquals, TokenType.Concat, TokenType.SpaceConcat, TokenType.TabConcat,
-						TokenType.NewlineConcat, TokenType.Dot
-					])) {
-						current = curPos;
-					} else
-						return fncall;
-				} else
-					throw new Exception("Expected (");
-			}
-		}
-
-		// Go back cause its not the function calls
-		current = curPos;
-
-		// Its the chain thing now
-		var chStart = chainStart();
-
-		if (match([TokenType.Dot])) {
-			advance();
-		} else {
-			current = curPos;
-			return null;
-		}
-		var chElements = chainElements();
-
-		if (chElements == null) {
-			// subfunctioncall
-			var l2 = label();
-			consume(TokenType.LParen, "Expected (");
-			var exprs = [];
-			if (!match([TokenType.RParen])) {
-				var expr = primaryExpressionOrExpression();
-				while (expr != null) {
-					exprs.push(expr);
-					if (match([TokenType.Comma])) {
-						advance();
-						expr = primaryExpressionOrExpression();
-					} else {
-						expr = null;
-					}
-				}
-			}
-			consume(TokenType.RParen, "Expected ) after call");
-			return new MethodCall(new ChainExpr(chStart, chElements), new FunctionCall(null, l2, exprs));
-		} else {
-			if (match([TokenType.Dot])) {
-				// subfunctioncall
-				advance(); // Skip the dot
-				var l2 = label();
-				consume(TokenType.LParen, "Expected (");
-				var exprs = [];
-				if (!match([TokenType.RParen])) {
-					var expr = primaryExpressionOrExpression();
-					while (expr != null) {
-						exprs.push(expr);
-						if (match([TokenType.Comma])) {
-							advance();
-							expr = primaryExpressionOrExpression();
-						} else {
-							expr = null;
-						}
-					}
-				}
-				consume(TokenType.RParen, "Expected ) after call");
-				return new MethodCall(chStart, new FunctionCall(null, l2, exprs));
-			} else {
-				if (Std.isOfType(chElements, FunctionCall)) {
-					if (match([
-						TokenType.BitwiseXor, TokenType.BitwiseOr, TokenType.BitwiseAnd, TokenType.Modulus, TokenType.Multiply, TokenType.Divide,
-						TokenType.Plus, TokenType.Minus, TokenType.QuestionMark, TokenType.LessThan, TokenType.GreaterThan, TokenType.GreaterThanEqual,
-						TokenType.LessThanEqual, TokenType.LeftBitShift, TokenType.RightBitShift, TokenType.LogicalAnd, TokenType.LogicalOr, TokenType.Equal,
-						TokenType.NotEqual, TokenType.StringEquals, TokenType.StringNotEquals, TokenType.Concat, TokenType.SpaceConcat, TokenType.TabConcat,
-						TokenType.NewlineConcat, TokenType.Comma
-					])) {
-						current = curPos;
-						return null;
-					}
-					return new MethodCall(chStart, cast chElements);
-				} else if (Std.isOfType(chElements, ChainExpr)) {
-					var lastElemParent:ChainExpr = null;
-					var lastElem:ChainExpr = cast chElements;
-					while (Std.isOfType(lastElem.right, ChainExpr)) {
-						lastElemParent = lastElem;
-						lastElem = cast lastElem.right;
-					}
-
-					if (Std.isOfType(lastElem.right, FunctionCall)) {
-						if (match([
-							TokenType.BitwiseXor, TokenType.BitwiseOr, TokenType.BitwiseAnd, TokenType.Modulus, TokenType.Multiply, TokenType.Divide,
-							TokenType.Plus, TokenType.Minus, TokenType.QuestionMark, TokenType.LessThan, TokenType.GreaterThan, TokenType.GreaterThanEqual,
-							TokenType.LessThanEqual, TokenType.LeftBitShift, TokenType.RightBitShift, TokenType.LogicalAnd, TokenType.LogicalOr,
-							TokenType.Equal, TokenType.NotEqual, TokenType.StringEquals, TokenType.StringNotEquals, TokenType.Concat, TokenType.SpaceConcat,
-							TokenType.TabConcat, TokenType.NewlineConcat, TokenType.Comma
-						])) {
-							current = curPos;
-							return null;
-						}
-						if (lastElemParent != null) {
-							lastElemParent.right = lastElem.left;
-						}
-						return new MethodCall(new ChainExpr(chStart, chElements), cast lastElem.right);
-					}
-					return null;
-				} else {
-					current = curPos;
-					return null;
-				}
-			}
-		}
-	}
-
-	function chainStart():Expr {
-		var curPos = current;
-		if (match([TokenType.LParen])) {
-			advance();
-			var expr = primaryExpressionOrExpression();
-			if (expr == null) {
-				throw new Exception("Expected an expression after ( for chainStart");
-			}
-			consume(TokenType.RParen, "Expected ) after expression");
-			if (match([TokenType.Dot]))
-				return new ParenthesizedExpression(new ChainExpression(expr));
-			else {
-				current = curPos;
-			}
-		}
-
-		var expr:Expr = localArray();
-		if (expr == null)
-			expr = globalArray();
-		if (expr == null)
-			expr = globalVariable();
-		if (expr == null)
-			expr = localVariable();
-		if (expr == null) {
-			var l1 = label();
-			if (l1 == null) {
-				expr = rvalue();
-
-				return expr;
-			}
-
-			if (match([TokenType.LParen])) {
-				advance();
-				var exprs = [];
-				var expr = primaryExpressionOrExpression();
-				if (!match([TokenType.RParen])) {
-					while (expr != null) {
-						exprs.push(expr);
-						if (match([TokenType.Comma])) {
-							advance();
-							expr = primaryExpressionOrExpression();
-						} else {
-							expr = null;
-						}
-					}
-				}
-				consume(TokenType.RParen, "Expected ) after call");
-
-				var fncall = new FunctionCall(null, l1, exprs);
-				return fncall;
-			} else if (match([TokenType.DoubleColon])) {
-				advance();
-				var l2 = label();
-				if (l2 == null)
-					throw new Exception("Expected function name");
-				if (match([TokenType.LParen])) {
-					advance();
-					var exprs = [];
-					if (!match([TokenType.RParen])) {
-						var expr = primaryExpressionOrExpression();
-						while (expr != null) {
-							exprs.push(expr);
-							if (match([TokenType.Comma])) {
-								advance();
-								expr = primaryExpressionOrExpression();
-							} else {
-								expr = null;
-							}
-						}
-					}
-					consume(TokenType.RParen, "Expected ) after call");
-
-					var fncall = new FunctionCall(l1, l2, exprs);
-					return fncall;
-				} else
-					throw new Exception("Expected (");
-			} else {
-				return new FieldExpr(l1);
-			}
-		} else
-			return expr;
-	}
-
-	function chainElements():Expr {
-		if (match([TokenType.Label])) {
-			var l1 = advance();
-			if (match([TokenType.LeftSquareBracket])) {
-				advance(); // consume [
-				var exprs:Array<Expr> = [];
-				var expr = expression();
-				while (expr != null) {
-					exprs.push(expr);
-					if (match([TokenType.Comma])) {
-						advance();
-						expr = expression();
-					} else {
-						expr = null;
-					}
-				}
-				consume(TokenType.RightSquareBracket, "Expected ] after call");
-				var retexpr = new FieldArrayExpr(new Label(l1.literal), exprs);
-
-				if (match([TokenType.Dot])) {
-					advance();
-					var elements = chainElements();
-					if (elements == null)
-						throw new Exception("Expected fields after period");
-					return new ChainExpr(retexpr, elements);
-				} else {
-					return retexpr;
-				}
-			} else if (match([TokenType.LParen])) {
-				advance(); // consume ()
-				var exprs = [];
-				if (!match([TokenType.RParen])) {
-					var expr = primaryExpressionOrExpression();
-					while (expr != null) {
-						exprs.push(expr);
-						if (match([TokenType.Comma])) {
-							advance();
-							expr = primaryExpressionOrExpression();
-						} else {
-							expr = null;
-						}
-					}
-				}
-				consume(TokenType.RParen, "Expected ) after call");
-
-				var fncall = new FunctionCall(null, new Label(l1.literal), exprs);
-				if (match([TokenType.Dot])) {
-					advance();
-					var elements = chainElements();
-					if (elements == null)
-						throw new Exception("Expected fields after period");
-					return new ChainExpr(fncall, elements);
-				} else {
-					return fncall;
-				}
-			} else if (match([TokenType.Dot])) {
-				advance(); // consume .
-				var elements = chainElements();
-				if (elements == null)
-					throw new Exception("Expected fields after period");
-
-				return new ChainExpr(new Label(l1.literal), elements);
-			} else {
-				return new Label(l1.literal);
-			}
-		} else {
-			return null;
-		}
-	}
-
-	function assignableChain():Expr {
-		var curpos = current;
-		var expr:Expr = localArray();
-		if (expr == null)
-			expr = globalArray();
-		if (expr == null)
-			expr = localVariable();
-		if (expr == null)
-			expr = globalVariable();
-		if (expr == null) {
-			var expr = chainStart();
-			if (expr == null)
-				return null;
-		}
-		if (match([TokenType.Dot])) {
-			advance(); // Consume the dot
-
-			var chElements = chainElements();
-			if (chElements != null) {
-				var l1 = new ChainExpr(expr, chElements);
-				if (match([TokenType.Dot])) {
-					var l2 = consume(TokenType.Label, "Expected field name");
-					if (match([TokenType.LeftSquareBracket])) {
-						var exprlist = [];
-						var expriter = primaryExpressionOrExpression();
-						while (expriter != null) {
-							exprlist.push(expriter);
-							if (match([TokenType.Comma])) {
-								advance();
-								expriter = primaryExpressionOrExpression();
-							} else {
-								expriter = null;
-							}
-						}
-						consume(TokenType.RightSquareBracket, "Expected ] after call");
-						return new ChainExpr(l1, new FieldArrayExpr(new Label(l2.literal), exprlist));
-					} else {
-						return new ChainExpr(l1, new Label(l2.literal));
-					}
-				} else {
-					return l1;
-				}
-			} else {
-				var l2 = consume(TokenType.Label, "Expected field name");
-				if (match([TokenType.LeftSquareBracket])) {
-					var exprlist = [];
-					var expriter = primaryExpressionOrExpression();
-					while (expriter != null) {
-						exprlist.push(expriter);
-						if (match([TokenType.Comma])) {
-							advance();
-							expriter = primaryExpressionOrExpression();
-						} else {
-							expriter = null;
-						}
-					}
-					consume(TokenType.RightSquareBracket, "Expected ] after call");
-					return new ChainExpr(expr, new FieldArrayExpr(new Label(l2.literal), exprlist));
-				} else {
-					return new ChainExpr(expr, new Label(l2.literal));
-				}
-			}
-		} else {
-			if (expr != null) {
-				return expr;
-			} else {
-				current = curpos;
-				return null;
-			}
-		}
-	}
-
-	function objectDeclaration():ObjectDeclaration {
-		if (match([TokenType.New])) {
-			advance(); // consume new
-			var className:Expr;
-			if (match([TokenType.LParen])) {
-				advance();
-				className = expression();
-				consume(TokenType.RParen, "Expected ) after class name");
-			} else {
-				className = label();
-			}
-			if (className == null)
-				throw new Exception("Expected class name");
-
-			var objName:Expr = null;
-			consume(TokenType.LParen, "Expected ( after new");
-			objName = primaryExpressionOrExpression();
-			var parentClassName:Expr = null;
-			if (match([TokenType.Colon])) {
-				advance(); // consume :
-				parentClassName = primaryExpressionOrExpression();
-			}
-			consume(TokenType.RParen, "Expected ) after new");
-
-			var fields = [];
-			var objdeclrs = [];
-
-			if (match([TokenType.LBracket])) {
-				consume(TokenType.LBracket, "Expected { after new");
-
-				var curfield = fieldAssign();
-				while (curfield != null) {
-					fields.push(curfield);
-					curfield = fieldAssign();
-				}
-
-				var curobjdeclr = objectDeclaration();
-				while (curobjdeclr != null) {
-					consume(TokenType.Semicolon, "Expected ; after object declaration");
-					objdeclrs.push(curobjdeclr);
-					curobjdeclr = objectDeclaration();
-				}
-
-				consume(TokenType.RBracket, "Expected } after new");
-			}
-
-			return new ObjectDeclaration(className, objName, parentClassName, fields, objdeclrs);
-		} else {
-			return null;
-		}
-	}
-
-	function datablockDeclaration():ExprStatement {
-		if (match([TokenType.Datablock])) {
-			advance(); // consume the datablock
-
-			var l1 = label();
-			if (l1 == null)
-				throw new Exception("Expected a class type");
-			consume(TokenType.LParen, "Expected (");
-			var l2 = label();
-			if (l2 == null)
-				throw new Exception("Expected a datablock name");
-			var baseshit:Label = null;
-			if (match([TokenType.Colon])) {
-				advance(); // consume the colon
-				baseshit = label();
-				if (baseshit == null)
-					throw new Exception("Expected a base datablock");
-			}
-
-			consume(TokenType.RParen, "Expected )");
-
-			consume(TokenType.LBracket, "Expected {");
-
-			var fields = [];
-			var f1 = fieldAssign();
-			if (f1 == null)
-				throw new Exception("Must have at least one field");
-			while (f1 != null) {
-				fields.push(f1);
-				f1 = fieldAssign();
-			}
-
-			consume(TokenType.RBracket, "Expected }");
-
-			return new DatablockDeclaration(l1, l2, baseshit, fields);
-		} else {
-			return null;
-		}
-	}
-
-	function fieldAssign():FieldAssignmentExpr {
-		if (match([
-			TokenType.Label, TokenType.Package, TokenType.Return, TokenType.Break, TokenType.Continue, TokenType.While, TokenType.False, TokenType.True,
-			TokenType.Function, TokenType.Else, TokenType.If, TokenType.Datablock, TokenType.Case, TokenType.SpaceConcat, TokenType.TabConcat,
-			TokenType.NewlineConcat
-		])) {
-			var tok = advance();
-			var l1 = new Label(tok.literal);
-			var subscript:Array<Expr> = null;
-
-			if (match([TokenType.LeftSquareBracket])) {
-				advance(); // consume [
-				var exprs = [];
-				var expr = primaryExpressionOrExpression();
-				while (expr != null) {
-					exprs.push(expr);
-					if (match([TokenType.Comma])) {
-						advance();
-						expr = primaryExpressionOrExpression();
-					} else {
-						expr = null;
-					}
-				}
-				consume(TokenType.RightSquareBracket, "Expected ] after array call");
-				subscript = exprs;
-			}
-
-			consume(TokenType.Assign, "Expected = after field name");
-			var rhs = primaryExpressionOrExpression();
-			consume(TokenType.Semicolon, "Expected ; after field assignment");
-
-			var fieldexpr = new FieldAssignmentExpr(l1, subscript, rhs);
-			return fieldexpr;
-		} else {
-			return null;
-		}
-	}
-
-	function primaryExpressionOrExpression():Expr {
-		var expr:Expr = primaryExpression();
-		if (expr == null)
-			expr = expression();
-		return expr;
-	}
-
-	function forControl():ForControl {
-		if (match([TokenType.For])) {
-			advance();
-			consume(TokenType.LParen, "Expected (");
-			var exp1 = primaryExpressionOrExpression();
-			consume(TokenType.Semicolon, "Expected ; after for condition");
-			var exp2 = primaryExpressionOrExpression();
-			consume(TokenType.Semicolon, "Expected ; after for condition");
-			var exp3 = primaryExpressionOrExpression();
-			consume(TokenType.RParen, "Expected ) after for condition");
-			var block = controlStatements();
-
-			var forControl = new ForControl(exp1, exp2, exp3, block);
-			return forControl;
-		} else {
-			return null;
-		}
-	}
-
-	function ifControl():IfControl {
-		if (match([TokenType.If])) {
-			advance(); // Consume the `if`
-
-			consume(TokenType.LParen, "Expected (");
-
-			var expr = expression();
-
-			consume(TokenType.RParen, "Expected ) after if condition");
-
-			var block = controlStatements();
-
-			if (match([TokenType.Else])) {
-				advance(); // Consume the `else`
-				var elseBlock = controlStatements();
-				var elseCtrl = new ElseControl(elseBlock);
-				var ifControl = new IfControl(expr, block, elseCtrl);
-				return ifControl;
-			} else {
-				var ifControl = new IfControl(expr, block, null);
-				return ifControl;
-			}
-		} else {
-			return null;
-		}
-	}
-
-	function whileControl():WhileControl {
-		if (match([TokenType.While])) {
-			advance(); // Consume the `while`
-			consume(TokenType.LParen, "Expected (");
-			var expr = expression();
-			if (expr == null)
-				throw new Exception("Expected expression");
-			consume(TokenType.RParen, "Expected ) after while condition");
-
-			var block = controlStatements();
-
-			var whileCtrl = new WhileControl(expr, block);
-			return whileCtrl;
-		} else {
-			return null;
-		}
-	}
-
-	function switchControl():SwitchControl {
-		if (match([TokenType.Switch])) {
-			advance(); // Consume the `switch`
-			var isStringSwitch = false;
-			if (match([TokenType.Dollar])) {
-				isStringSwitch = true;
-				advance();
-			}
-			consume(TokenType.LParen, "Expected (");
-			var expr = primaryExpressionOrExpression();
-			if (expr == null)
-				throw new Exception("Expected expression");
-			consume(TokenType.RParen, "Expected ) after while condition");
-
-			consume(TokenType.LBracket, "Expected { after condition");
-
-			var cases = [];
-			var caseCtrl:CaseControl = caseControl();
-			if (caseCtrl == null)
-				throw new Exception("Expected atleast a single case in switch");
-			cases.push(caseCtrl);
-			do {
-				caseCtrl = caseControl();
-				if (caseCtrl != null)
-					cases.push(caseCtrl);
-			} while (caseCtrl != null);
-
-			var defaultCtrl = defaultControl();
-
-			consume(TokenType.RBracket, "Expected }");
-
-			var switchCtrl = new SwitchControl(isStringSwitch, expr, cases, defaultCtrl);
-			return switchCtrl;
-		} else {
-			return null;
-		}
-	}
-
-	function caseControl():CaseControl {
-		if (match([TokenType.Case])) {
-			advance(); // Consume the `case`
-
-			var exprs = [];
-
-			var expr = expression();
-
-			while (expr != null) {
-				exprs.push(expr);
-				if (match([TokenType.Or])) {
-					advance();
-					expr = expression();
-				} else {
-					expr = null;
-				}
-			}
-
-			consume(TokenType.Colon, "Expected : after condition");
-
-			var exprStmts = [];
-			var stmt = expressionStatement();
-			while (stmt != null) {
-				exprStmts.push(stmt);
-				stmt = expressionStatement();
-			}
-
-			return new CaseControl(exprs, exprStmts);
-		} else {
-			return null;
-		}
-	}
-
-	function defaultControl():DefaultControl {
-		if (match([TokenType.Default])) {
-			advance(); // Consume the `default`
-			consume(TokenType.Colon, "Expected : after default");
-
-			var exprStmts = [];
-			var stmt = expressionStatement();
-			while (stmt != null) {
-				exprStmts.push(stmt);
-				stmt = expressionStatement();
-			}
-
-			return new DefaultControl(exprStmts);
-		} else {
-			return null;
-		}
-	}
-
-	function continueControl():ContinueControl {
-		if (match([TokenType.Continue])) {
-			advance(); // Consume the `continue`
-			return new ContinueControl();
-		} else {
-			return null;
-		}
-	}
-
-	function breakControl():BreakControl {
-		if (match([TokenType.Break])) {
-			advance(); // Consume the `break`
-			return new BreakControl();
-		} else {
-			return null;
-		}
-	}
-
-	function controlStatements():Array<ExprStatement> {
-		if (match([TokenType.LBracket])) {
-			advance(); // Consume `{`
-			var exprs:Array<ExprStatement> = [];
-			var expr = expressionStatement();
-			while (expr != null) {
-				exprs.push(expr);
-				expr = expressionStatement();
-			}
-			consume(TokenType.RBracket, "Expected } after control statements");
-			return exprs;
-		} else {
-			var expr = expressionStatement();
-			if (expr == null)
-				return null;
-			return [expr];
-		}
-	}
-
-	function chain():Expr {
-		var chStart = chainStart();
-		if (chStart != null) {
-			if (match([TokenType.Dot])) {
-				advance(); // Consume the dot
-
-				var chelements = chainElements();
-				if (chelements == null)
-					throw new Exception("Expected chain elements");
-
-				return new ChainExpr(chStart, chelements);
-			} else {
-				return chStart;
-			}
-		} else {
-			return null;
-		}
-	}
-
-	function expression(recurse:Int = 0):Expression {
-		// Do the precendence crap in this order of if conditions
-		// parenthesis
-		// string concat
-		// equality compare
-		// logical
-		// bitshifts
-		// relational
-		// ternary
-		// add/sub
-		// mult/div/mod
-		// bitwise
-		// chain
-		// unary
-
-		// TODO FIX POSTFIX
-
-		function primaryExp():Expression {
-			var ch = chain();
-			if (ch != null) {
-				var chexp = new ChainExpression(ch);
-				if (match([TokenType.PlusPlus, TokenType.MinusMinus])) {
-					var postfix = advance();
-					return new PostfixExpression(postfix, chexp);
-				} else
-					return chexp;
-			} else {
-				var rval = rvalue();
-				if (rval != null)
-					return new ValueExpression(rval);
-				else {
-					if (match([TokenType.Minus, TokenType.Not, TokenType.Tilde])) {
-						var op = advance(); // Consume the unary operator
-						var expr = expression();
-						if (expr == null)
-							throw new Exception("Expected expression after unary operator");
-						if (match([TokenType.PlusPlus, TokenType.MinusMinus])) {
-							var postfix = advance();
-							return new UnaryExpression(new PostfixExpression(postfix, expr), op);
-						} else
-							return new UnaryExpression(expr, op);
-					} else {
-						if (match([TokenType.LParen])) {
-							advance(); // Consume the `(`
-							var ret = primaryExpressionOrExpression();
-							consume(TokenType.RParen, "Expected ) after expression");
-							var chexp = new ParenthesizedExpression(new ChainExpression(ret));
-							if (match([TokenType.PlusPlus, TokenType.MinusMinus])) {
-								var postfix = advance();
-								return new PostfixExpression(postfix, chexp);
-							} else
-								return chexp;
-						} else {
-							return null;
-						}
-					}
-				}
-			}
-		}
-
-		function bitwiseExp():Expression {
-			var lhs = primaryExp();
-			if (match([TokenType.BitwiseAnd, TokenType.BitwiseOr, TokenType.BitwiseXor])) {
-				var op = advance(); // Consume the bitwise operator
-				var rhs = primaryExp();
-				if (rhs == null)
-					throw new Exception("Expected expression after bitwise operator");
-
-				rhs = new BitshiftExpression(lhs, op, rhs);
-
-				while (match([TokenType.BitwiseAnd, TokenType.BitwiseOr, TokenType.BitwiseXor])) {
-					var op2 = advance(); // Consume the bitwise operator
-					var rhs2 = primaryExp();
-					if (rhs2 == null)
-						throw new Exception("Expected expression after bitwise operator");
-
-					rhs = new BitwiseExpression(rhs, op2, rhs2);
-				}
-
-				return rhs;
-			} else {
-				return lhs;
-			}
-		}
-
-		function factorExp():Expression {
-			var lhs = bitwiseExp();
-
-			if (match([TokenType.Modulus, TokenType.Multiply, TokenType.Divide])) {
-				var op = advance(); // Consume the operator
-				var rhs = bitwiseExp();
-				if (rhs == null)
-					throw new Exception("Expected rhs after bitwise operator");
-
-				rhs = new ArithmeticExpression(lhs, op, rhs);
-
-				while (match([TokenType.Modulus, TokenType.Multiply, TokenType.Divide])) {
-					var op2 = advance(); // Consume the operator
-					var rhs2 = bitwiseExp();
-					if (rhs2 == null)
-						throw new Exception("Expected rhs after bitwise operator");
-
-					rhs = new ArithmeticExpression(rhs, op2, rhs2);
-				}
-
-				return rhs;
-			} else {
-				return lhs;
-			}
-		}
-
-		function termExp():Expression {
-			var lhs = factorExp();
-
-			if (match([TokenType.Plus, TokenType.Minus])) {
-				var op = advance(); // Consume the plus/minus operator
-				var rhs = termExp();
-				if (rhs == null)
-					throw new Exception("Expected expression after plus/minus operator");
-				rhs = new ArithmeticExpression(lhs, op, rhs);
-
-				while (match([TokenType.Plus, TokenType.Minus])) {
-					var op2 = advance(); // Consume the plus/minus operator
-					var rhs2 = termExp();
-					if (rhs2 == null)
-						throw new Exception("Expected expression after plus/minus operator");
-					rhs = new ArithmeticExpression(rhs, op2, rhs2);
-				}
-
-				return rhs;
-			} else {
-				return lhs;
-			}
-		}
-
-		function ternaryExp():Expression {
-			var lhs = termExp();
-
-			if (match([TokenType.QuestionMark])) {
-				advance();
-				var trueExpr = expression();
-				if (trueExpr == null)
-					throw new Exception("Expected true expression");
-				consume(TokenType.Colon, "Expected : after true expression");
-				var falseExpr = expression();
-				if (falseExpr == null)
-					throw new Exception("Expected false expression");
-				return new TernaryExpression(lhs, trueExpr, falseExpr);
-			} else {
-				return lhs;
-			}
-		}
-
-		function relationalExp():Expression {
-			var lhs = ternaryExp();
-			if (match([
-				TokenType.LessThan,
-				TokenType.GreaterThan,
-				TokenType.LessThanEqual,
-				TokenType.GreaterThanEqual
-			])) {
-				var op = advance();
-				var rhs = ternaryExp();
-				if (rhs == null)
-					throw new Exception("Expected right hand side");
-
-				rhs = new RelationalExpression(lhs, op, rhs);
-
-				while (match([
-					TokenType.LessThan,
-					TokenType.GreaterThan,
-					TokenType.LessThanEqual,
-					TokenType.GreaterThanEqual
-				])) {
-					var op2 = advance();
-					var rhs2 = ternaryExp();
-					if (rhs2 == null)
-						throw new Exception("Expected right hand side");
-					rhs = new RelationalExpression(rhs, op2, rhs2);
-				}
-
-				return rhs;
-			} else {
-				return lhs;
-			}
-		}
-
-		function bitshiftExp():Expression {
-			var lhs = relationalExp();
-			if (match([TokenType.LeftBitShift, TokenType.RightBitShift])) {
-				var op = advance();
-				var rhs = relationalExp();
-				if (rhs == null)
-					throw new Exception("Expected right hand side");
-
-				rhs = new BitshiftExpression(lhs, op, rhs);
-
-				while (match([TokenType.LeftBitShift, TokenType.RightBitShift])) {
-					var op2 = advance();
-					var rhs2 = relationalExp();
-					if (rhs2 == null)
-						throw new Exception("Expected right hand side");
-					rhs = new BitshiftExpression(rhs, op2, rhs2);
-				}
-
-				return rhs;
-			} else
-				return lhs;
-		}
-
-		function logicalExp():Expression {
-			var lhs = bitshiftExp();
-			if (match([TokenType.LogicalAnd, TokenType.LogicalOr])) {
-				var op = advance();
-				var rhs = bitshiftExp();
-				if (rhs == null)
-					throw new Exception("Expected right hand side");
-
-				rhs = new LogicalExpression(lhs, op, rhs);
-
-				while (match([TokenType.LogicalAnd, TokenType.LogicalOr])) {
-					var op2 = advance();
-					var rhs2 = bitshiftExp();
-					if (rhs2 == null)
-						throw new Exception("Expected right hand side");
-					rhs = new LogicalExpression(rhs, op2, rhs2);
-				}
-
-				return rhs;
-			} else
-				return lhs;
-		}
-
-		function equalityExp():Expression {
-			var lhs = logicalExp();
-
-			if (match([
-				TokenType.Equal,
-				TokenType.NotEqual,
-				TokenType.StringEquals,
-				TokenType.StringNotEquals
-			])) {
-				var op = advance();
-				var rhs = logicalExp();
-				if (rhs == null)
-					throw new Exception("Expected right hand side");
-
-				rhs = new EqualityExpression(lhs, op, rhs);
-
-				while (match([
-					TokenType.Equal,
-					TokenType.NotEqual,
-					TokenType.StringEquals,
-					TokenType.StringNotEquals
-				])) {
-					var op2 = advance();
-					var rhs2 = logicalExp();
-					if (rhs2 == null)
-						throw new Exception("Expected right hand side");
-					rhs = new EqualityExpression(rhs, op2, rhs2);
-				}
-
-				return rhs;
-			} else
-				return lhs;
-		}
-
-		function concatExp():Expression {
-			var lhs = equalityExp();
-
-			if (match([
-				TokenType.Concat,
-				TokenType.TabConcat,
-				TokenType.SpaceConcat,
-				TokenType.NewlineConcat
-			])) {
-				var op = advance();
-				var rhs = equalityExp();
-				if (rhs == null)
-					throw new Exception("Expected right hand side");
-				rhs = new ConcatenationExpression(lhs, op, rhs);
-
-				while (match([
-					TokenType.Concat,
-					TokenType.TabConcat,
-					TokenType.SpaceConcat,
-					TokenType.NewlineConcat
-				])) {
-					var op2 = advance();
-					var rhs2 = equalityExp();
-					if (rhs2 == null)
-						throw new Exception("Expected right hand side");
-					rhs = new ConcatenationExpression(rhs, op2, rhs2);
-				}
-
-				return rhs;
-			} else
-				return lhs;
-		}
-
-		return concatExp();
-	}
-
-	function label():Label {
-		if (match([TokenType.Label])) {
-			var label = consume(TokenType.Label, "Expected label");
-			var labelexpr = new Label(cast label.literal);
-			return labelexpr;
-		} else {
-			return null;
-		}
-	}
-
-	function localVariable():LocalVariable {
-		if (match([TokenType.Modulus])) {
-			advance();
-			if (match([
-				TokenType.Label, TokenType.Package, TokenType.Return, TokenType.Break, TokenType.Continue, TokenType.While, TokenType.False, TokenType.True,
-				TokenType.Function, TokenType.Else, TokenType.If, TokenType.Datablock, TokenType.Case, TokenType.SpaceConcat, TokenType.TabConcat,
-				TokenType.NewlineConcat, TokenType.Default, TokenType.New
-			])) {
-				var n1 = advance();
-				var namespace = "";
-				while (match([TokenType.DoubleColon])) {
-					namespace += cast n1.literal + "::";
-					advance();
-					if (match([
-						TokenType.Label, TokenType.Package, TokenType.Return, TokenType.Break, TokenType.Continue, TokenType.While, TokenType.False,
-						TokenType.True, TokenType.Function, TokenType.Else, TokenType.If, TokenType.Datablock, TokenType.Case, TokenType.SpaceConcat,
-						TokenType.TabConcat, TokenType.NewlineConcat, TokenType.Default, TokenType.New
-					])) {
-						n1 = advance();
-					} else if (match([TokenType.Int])) {
-						n1 = advance();
-						if (match([
-							TokenType.Label, TokenType.Package, TokenType.Return, TokenType.Break, TokenType.Continue, TokenType.While, TokenType.False,
-							TokenType.True, TokenType.Function, TokenType.Else, TokenType.If, TokenType.Datablock, TokenType.Case, TokenType.SpaceConcat,
-							TokenType.TabConcat, TokenType.NewlineConcat
-						])) {
-							var n2 = advance();
-							n1 = new Token(TokenType.Label, cast(n1.literal, String) + cast(n2.literal, String),
-								cast(n1.literal, String) + cast(n2.literal, String), n1.line);
-						}
-					} else
-						throw new Exception("Expected variable name");
-				}
-
-				var localvar = new LocalVariable(new Label(cast n1.literal), namespace == "" ? null : new Label(namespace));
-				return localvar;
-			} else
-				throw new Exception("Expected variable name");
-		} else {
-			return null;
-		}
-	}
-
-	function globalVariable():GlobalVariable {
-		if (match([TokenType.Dollar])) {
-			advance();
-			if (match([
-				TokenType.Label, TokenType.Package, TokenType.Return, TokenType.Break, TokenType.Continue, TokenType.While, TokenType.False, TokenType.True,
-				TokenType.Function, TokenType.Else, TokenType.If, TokenType.Datablock, TokenType.Case, TokenType.SpaceConcat, TokenType.TabConcat,
-				TokenType.NewlineConcat
-			])) {
-				var n1 = advance();
-				var namespace = "";
-				while (match([TokenType.DoubleColon])) {
-					namespace += cast n1.literal + "::";
-					advance();
-					if (match([
-						TokenType.Label, TokenType.Package, TokenType.Return, TokenType.Break, TokenType.Continue, TokenType.While, TokenType.False,
-						TokenType.True, TokenType.Function, TokenType.Else, TokenType.If, TokenType.Datablock, TokenType.Case, TokenType.SpaceConcat,
-						TokenType.TabConcat, TokenType.NewlineConcat
-					])) {
-						n1 = advance();
-					} else if (match([TokenType.Int])) {
-						n1 = advance();
-						if (match([
-							TokenType.Label, TokenType.Package, TokenType.Return, TokenType.Break, TokenType.Continue, TokenType.While, TokenType.False,
-							TokenType.True, TokenType.Function, TokenType.Else, TokenType.If, TokenType.Datablock, TokenType.Case, TokenType.SpaceConcat,
-							TokenType.TabConcat, TokenType.NewlineConcat
-						])) {
-							var n2 = advance();
-							n1 = new Token(TokenType.Label, cast(n1.literal, String) + cast(n2.literal, String),
-								cast(n1.literal, String) + cast(n2.literal, String), n1.line);
-						}
-					} else
-						throw new Exception("Expected variable name");
-				}
-
-				var localvar = new GlobalVariable(new Label(cast n1.literal), namespace == "" ? null : new Label(namespace));
-				return localvar;
-			} else
-				throw new Exception("Expected variable name");
-		} else {
-			return null;
-		}
-	}
-
-	function localArray():LocalArray {
-		var curpos = current;
-
-		var localvar = localVariable();
-		if (localvar == null)
-			return null;
-
-		if (!match([TokenType.LeftSquareBracket])) {
-			current = curpos;
-			return null;
-		}
-
-		consume(TokenType.LeftSquareBracket, "Expected [");
-
-		var exprs:Array<Expr> = [];
-		var expr = primaryExpressionOrExpression();
-		while (expr != null) {
-			exprs.push(expr);
-			if (match([TokenType.Comma])) {
-				advance();
-				expr = primaryExpressionOrExpression();
-			} else {
-				break;
-			}
-		}
-		consume(TokenType.RightSquareBracket, "Expected ]");
-
-		var localArr = new LocalArray(localvar, exprs);
-		return localArr;
-	}
-
-	function globalArray():GlobalArray {
-		var curpos = current;
-
-		var globalvar = globalVariable();
-		if (globalvar == null)
-			return null;
-
-		if (!match([TokenType.LeftSquareBracket])) {
-			current = curpos;
-			return null;
-		}
-
-		consume(TokenType.LeftSquareBracket, "Expected [");
-
-		var exprs:Array<Expr> = [];
-		var expr = primaryExpressionOrExpression();
-		while (expr != null) {
-			exprs.push(expr);
-			if (match([TokenType.Comma])) {
-				advance();
-				expr = primaryExpressionOrExpression();
-			} else {
-				break;
-			}
-		}
-		consume(TokenType.RightSquareBracket, "Expected ]");
-
-		var globalArr = new GlobalArray(globalvar, exprs);
-		return globalArr;
-	}
-
-	function rvalue():Expr {
-		if (match([TokenType.Int, TokenType.Float])) {
-			return new NumberValue(advance());
-		}
-		if (match([TokenType.String, TokenType.TaggedString])) {
-			return new StringValue(advance());
-		}
-		if (match([TokenType.Label])) {
-			return new LabelValue(advance());
-		}
-		if (match([TokenType.True, TokenType.False])) {
-			return new BooleanValue(advance());
-		}
-		var objDeclr = objectDeclaration();
-		return objDeclr;
 	}
 
 	function consume(tokenType:TokenType, message:String) {

@@ -13,7 +13,7 @@ class Main {
 		execDirectory("D:/Marbleblast/PQ-src/Build/Cache/PQ/Marble Blast Platinum");
 		trace('Parsed ${successFiles} files out of ${successFiles + failedFiles} files');
 
-		// var f = File.getContent("mb/playGui.cs");
+		// var f = File.getContent("mb/bruh.cs");
 		// var scanner = new Scanner(f);
 		// var toks = scanner.scanTokens();
 		// var parser = new Parser(toks);

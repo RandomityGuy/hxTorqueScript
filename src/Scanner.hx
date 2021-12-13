@@ -95,7 +95,7 @@ class Scanner {
 			case "|":
 				addToken(match('=') ? TokenType.OrAssign : match('|') ? TokenType.LogicalOr : TokenType.BitwiseOr);
 			case "^":
-				addToken(TokenType.BitwiseXor);
+				addToken(match('=') ? TokenType.XorAssign : TokenType.BitwiseXor);
 			case "~":
 				addToken(TokenType.Tilde);
 			case "!":
@@ -114,9 +114,9 @@ class Scanner {
 			case '=':
 				addToken(match('=') ? TokenType.Equal : TokenType.Assign);
 			case '<':
-				addToken(match('=') ? TokenType.LessThanEqual : match('<') ? TokenType.LeftBitShift : TokenType.LessThan);
+				addToken(match('=') ? TokenType.LessThanEqual : match('<') ? match('=') ? TokenType.ShiftLeftAssign : TokenType.LeftBitShift : TokenType.LessThan);
 			case '>':
-				addToken(match('=') ? TokenType.GreaterThanEqual : match('>') ? TokenType.RightBitShift : TokenType.GreaterThan);
+				addToken(match('=') ? TokenType.GreaterThanEqual : match('>') ? match('=') ? TokenType.ShiftRightAssign : TokenType.RightBitShift : TokenType.GreaterThan);
 
 			case '"':
 				string('"', TokenType.String);

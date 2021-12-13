@@ -28,8 +28,11 @@ enum TokenType {
 	MultiplyAssign;
 	OrAssign;
 	AndAssign;
+	XorAssign;
 	ModulusAssign;
 	DivideAssign;
+	ShiftLeftAssign;
+	ShiftRightAssign;
 	LessThan;
 	GreaterThan;
 	LessThanEqual;
