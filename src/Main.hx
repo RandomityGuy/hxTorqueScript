@@ -9,15 +9,14 @@ class Main {
 	static var failedFiles = 0;
 
 	static public function main():Void {
-		// execDirectory("mb");
-		execDirectory("D:/Marbleblast/PQ-src/Build/Cache/PQ/Marble Blast Platinum");
-		trace('Parsed ${successFiles} files out of ${successFiles + failedFiles} files');
+		// execDirectory("tests");
+		// parseDirectory("mb");
+		// parseDirectory("D:/Marbleblast/PQ-src/Build/Cache/PQ/Marble Blast Platinum");
+		// trace('Compiled ${successFiles} files out of ${successFiles + failedFiles} files');
 
-		// var f = File.getContent("mb/bruh.cs");
-		// var scanner = new Scanner(f);
-		// var toks = scanner.scanTokens();
-		// var parser = new Parser(toks);
-		// var stmts = parser.parse();
+		var f = File.getContent("tests/package.cs");
+		var compiler = new Compiler();
+		compiler.compile(f);
 	}
 
 	static public function execDirectory(path:String) {
@@ -29,17 +28,39 @@ class Main {
 			} else {
 				if (Path.extension(file) == 'cs' || Path.extension(file) == 'gui') {
 					var f = File.getContent(path + '/' + file);
-					var scanner = new Scanner(f);
 					try {
-						var toks = scanner.scanTokens();
-						var parser = new Parser(toks);
-						var stmts = parser.parse();
-						trace('Parsed ${stmts.length} statements for ${file} (${toks.length} tokens)');
+						var compiler = new Compiler();
+						var bytesB = compiler.compile(f);
+						File.saveBytes(path + '/' + file + '.dso', bytesB.getBytes());
 						successFiles++;
 					} catch (e) {
-						trace('Failed parsing ${file}');
+						trace('Failed compiling ${file}');
 						failedFiles++;
 					}
+				}
+			}
+		}
+	}
+
+	static public function parseDirectory(path:String) {
+		var files = FileSystem.readDirectory(path);
+
+		for (file in files) {
+			if (FileSystem.isDirectory(path + '/' + file)) {
+				parseDirectory(path + '/' + file);
+			} else {
+				if (Path.extension(file) == 'cs' || Path.extension(file) == 'gui') {
+					var f = File.getContent(path + '/' + file);
+					// try {
+					var scanner = new Scanner(f);
+					var toks = scanner.scanTokens();
+					var parser = new Parser(toks);
+					var exprs = parser.parse();
+					successFiles++;
+					// } catch (e) {
+					// 	trace('Failed parsing ${file}');
+					// 	failedFiles++;
+					// }
 				}
 			}
 		}

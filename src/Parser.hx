@@ -35,10 +35,11 @@ class Parser {
 	function decl():Array<Stmt> {
 		var pkfuncs = packageDecl();
 		var d:Stmt = null;
-		if (pkfuncs == null)
+		if (pkfuncs == null) {
 			d = functionDecl();
-		if (d == null)
-			d = stmt();
+			if (d == null)
+				d = stmt();
+		}
 
 		return pkfuncs != null ? pkfuncs.map(x -> cast x) : [d];
 	}
@@ -180,13 +181,13 @@ class Parser {
 	}
 
 	function stmt():Stmt {
-		var e = expressionStmt();
+		var e:Stmt = breakStmt();
 		if (e == null)
 			e = returnStmt();
 		if (e == null)
 			e = continueStmt();
 		if (e == null)
-			e = breakStmt();
+			e = expressionStmt();
 		if (e == null)
 			e = switchStmt();
 		if (e == null)
@@ -376,7 +377,7 @@ class Parser {
 			consume(TokenType.RBracket, "Expected '}' after datablock body");
 			consume(TokenType.Semicolon, "Expected ';' after datablock body");
 
-			var dbdecl = new ObjectDeclExpr(new ConstantExpr(name), parentName, new ConstantExpr(name), null, slots, null);
+			var dbdecl = new ObjectDeclExpr(new ConstantExpr(name), parentName, new ConstantExpr(name), [], slots, [], true);
 			dbdecl.structDecl = true;
 			return dbdecl;
 		} else {
@@ -388,16 +389,19 @@ class Parser {
 		if (match([TokenType.Label])) {
 			var slotName = consume(TokenType.Label, "Expected identifier after slot assignment");
 
-			var arrayIdx:Array<Expr> = null;
+			var arrayIdx:Expr = null;
 			if (match([TokenType.LeftSquareBracket])) {
 				advance();
-				arrayIdx = [];
+				arrayIdx = null;
 				var arrayExpr = expression();
 				if (arrayExpr == null) {
 					throw new Exception("Expected expression after '['");
 				}
 				while (arrayExpr != null) {
-					arrayIdx.push(arrayExpr);
+					if (arrayIdx == null)
+						arrayIdx = arrayExpr;
+					else
+						arrayIdx = new CommaCatExpr(arrayIdx, arrayExpr);
 					if (match([TokenType.Comma])) {
 						advance();
 						arrayExpr = expression();
@@ -524,16 +528,19 @@ class Parser {
 			if (match([TokenType.Dot])) {
 				advance();
 				var labelAccess = consume(TokenType.Label, "Expected label after expression");
-				var arrAccess:Array<Expr> = null;
+				var arrAccess:Expr = null;
 				if (match([TokenType.LeftSquareBracket])) {
 					advance();
-					arrAccess = [];
+					arrAccess = null;
 					var arrExpr = expression();
 					if (arrExpr == null) {
 						throw new Exception("Expected expression after '['");
 					}
 					while (arrExpr != null) {
-						arrAccess.push(arrExpr);
+						if (arrAccess == null)
+							arrAccess = arrExpr;
+						else
+							arrAccess = new CommaCatExpr(arrAccess, arrExpr);
 						if (match([TokenType.Comma])) {
 							advance();
 							arrExpr = expression();
@@ -574,7 +581,7 @@ class Parser {
 							}
 							consume(RParen, "Expected ')' after function call arguments");
 
-							return new FuncCallExpr(labelAccess, null, funcexprs);
+							return new FuncCallExpr(labelAccess, null, funcexprs, MethodCall);
 						} else {
 							throw new Exception("Cannot call array methods with a dot notation accessor");
 						}
@@ -696,7 +703,8 @@ class Parser {
 							}
 						}
 						consume(TokenType.RParen, "Expected ')' after function parameters");
-						return new FuncCallExpr(funcname, parentname, funcexprs);
+						return new FuncCallExpr(funcname, parentname, funcexprs,
+							cast(parentname.literal, String).toLowerCase() == "parent" ? ParentCall : FunctionCall);
 					} else {
 						return null;
 					}
@@ -720,7 +728,7 @@ class Parser {
 
 			var objNameExpr:Expr = null;
 			var parentObj:Token = null;
-			var objArgs:Array<Expr> = null;
+			var objArgs:Array<Expr> = [];
 			if (!match([TokenType.RParen])) {
 				objNameExpr = expression();
 				if (match([TokenType.Colon])) {
@@ -770,9 +778,9 @@ class Parser {
 
 				consume(TokenType.RBracket, "Expected '}'");
 
-				return new ObjectDeclExpr(classNameExpr, parentObj, objNameExpr, objArgs, slotAssigns, subObjects);
+				return new ObjectDeclExpr(classNameExpr, parentObj, objNameExpr, objArgs, slotAssigns, subObjects, false);
 			} else {
-				return new ObjectDeclExpr(classNameExpr, parentObj, objNameExpr, objArgs, null, null);
+				return new ObjectDeclExpr(classNameExpr, parentObj, objNameExpr, objArgs, [], [], false);
 			}
 			return null;
 		} else {
@@ -797,16 +805,18 @@ class Parser {
 				return new IntUnaryExpr(subexpr, tok);
 			} else if (match([TokenType.Modulus, TokenType.Dollar])) {
 				var varExpr = variable();
-				var varIdx:Array<Expr> = null;
+				var varIdx:Expr = null;
 				if (match([TokenType.LeftSquareBracket])) {
 					advance();
-					varIdx = [];
 					var arrExpr = expression();
 					if (arrExpr == null)
 						throw new Exception("Expected array index");
 
 					while (arrExpr != null) {
-						varIdx.push(arrExpr);
+						if (varIdx == null)
+							varIdx = arrExpr;
+						else
+							varIdx = new CommaCatExpr(varIdx, arrExpr);
 						if (match([TokenType.Comma])) {
 							advance();
 							arrExpr = expression();
@@ -854,16 +864,19 @@ class Parser {
 				if (match([TokenType.Dot])) {
 					advance();
 					var labelAccess = consume(TokenType.Label, "Expected label after expression");
-					var arrAccess:Array<Expr> = null;
+					var arrAccess:Expr = null;
 					if (match([TokenType.LeftSquareBracket])) {
 						advance();
-						arrAccess = [];
+						arrAccess = null;
 						var arrExpr = expression();
 						if (arrExpr == null) {
 							throw new Exception("Expected expression after '['");
 						}
 						while (arrExpr != null) {
-							arrAccess.push(arrExpr);
+							if (arrAccess == null)
+								arrAccess = arrExpr;
+							else
+								arrAccess = new CommaCatExpr(arrAccess, arrExpr);
 							if (match([TokenType.Comma])) {
 								advance();
 								arrExpr = expression();
@@ -907,7 +920,7 @@ class Parser {
 								}
 								consume(RParen, "Expected ')' after function call arguments");
 
-								chExpr = new FuncCallExpr(labelAccess, null, funcexprs);
+								chExpr = new FuncCallExpr(labelAccess, null, funcexprs, MethodCall);
 							} else {
 								throw new Exception("Cannot call array methods with a dot notation accessor");
 							}
@@ -917,26 +930,6 @@ class Parser {
 					}
 				} else if (Std.isOfType(expr, VarExpr)) {
 					var varExpr:VarExpr = cast expr;
-					var arrAccess:Array<Expr> = null;
-					if (match([TokenType.LeftSquareBracket])) {
-						advance();
-						arrAccess = [];
-						var arrExpr = expression();
-						if (arrExpr == null) {
-							throw new Exception("Expected expression after '['");
-						}
-						while (arrExpr != null) {
-							arrAccess.push(arrExpr);
-							if (match([TokenType.Comma])) {
-								advance();
-								arrExpr = expression();
-							} else {
-								break;
-							}
-						}
-
-						consume(TokenType.RightSquareBracket, "Expected ']' after array index");
-					}
 
 					var nextTok = peek();
 
@@ -956,7 +949,6 @@ class Parser {
 							chExpr = new AssignExpr(varExpr, rexpr);
 
 						default:
-							varExpr.arrayIndex = arrAccess;
 							chExpr = varExpr;
 					}
 				} else if (Std.isOfType(expr, ConstantExpr)) {
@@ -979,7 +971,7 @@ class Parser {
 
 						consume(TokenType.RParen, "Expected ')' after constant function arguments");
 
-						chExpr = new FuncCallExpr(fnname, null, fnArgs);
+						chExpr = new FuncCallExpr(fnname, null, fnArgs, FunctionCall);
 					} else if (match([TokenType.DoubleColon])) {
 						advance();
 						var parentname = cast(expr, ConstantExpr).name;
@@ -1000,7 +992,8 @@ class Parser {
 
 						consume(TokenType.RParen, "Expected ')' after constant function arguments");
 
-						chExpr = new FuncCallExpr(fnname, parentname, fnArgs);
+						chExpr = new FuncCallExpr(fnname, parentname, fnArgs,
+							cast(parentname.literal, String).toLowerCase() == "parent" ? ParentCall : FunctionCall);
 					} else
 						chExpr = expr;
 				} else {
@@ -1034,18 +1027,21 @@ class Parser {
 
 					consume(TokenType.RParen, "Expected ')' after function arguments");
 
-					chExpr = new FuncCallExpr(label, null, fnArgs);
+					chExpr = new FuncCallExpr(label, null, fnArgs, MethodCall);
 				} else {
-					var arrAccess:Array<Expr> = null;
+					var arrAccess:Expr = null;
 					if (match([TokenType.LeftSquareBracket])) {
 						advance();
-						arrAccess = [];
+						arrAccess = null;
 						var arrExpr = expression();
 						if (arrExpr == null) {
 							throw new Exception("Expected expression after '['");
 						}
 						while (arrExpr != null) {
-							arrAccess.push(arrExpr);
+							if (arrAccess == null)
+								arrAccess = arrExpr;
+							else
+								arrAccess = new CommaCatExpr(arrAccess, arrExpr);
 							if (match([TokenType.Comma])) {
 								advance();
 								arrExpr = expression();
@@ -1090,6 +1086,16 @@ class Parser {
 				TokenType.BitwiseXor,
 				TokenType.Modulus
 			])) {
+				var lhsExpr:Dynamic = null;
+
+				var lhsAssign = false;
+				if (Std.isOfType(lhs, AssignExpr) || Std.isOfType(lhs, AssignOpExpr) || Std.isOfType(lhs, SlotAssignExpr)
+					|| Std.isOfType(lhs, SlotAssignOpExpr)) {
+					lhsExpr = cast lhs;
+					lhs = lhsExpr.expr;
+					lhsAssign = true;
+				}
+
 				var op = advance(); // Consume the bitwise operator
 				var rhs = chainExpr();
 				if (rhs == null)
@@ -1111,7 +1117,12 @@ class Parser {
 					rhs = new IntBinaryExpr(rhs, rhs2, op2);
 				}
 
-				return rhs;
+				if (lhsAssign) {
+					lhsExpr.expr = rhs;
+					return lhsExpr;
+				} else {
+					return rhs;
+				}
 			} else {
 				return lhs;
 			}
@@ -1121,6 +1132,16 @@ class Parser {
 			var lhs = bitwiseExp();
 
 			if (match([TokenType.Multiply, TokenType.Divide])) {
+				var lhsExpr:Dynamic = null;
+
+				var lhsAssign = false;
+				if (Std.isOfType(lhs, AssignExpr) || Std.isOfType(lhs, AssignOpExpr) || Std.isOfType(lhs, SlotAssignExpr)
+					|| Std.isOfType(lhs, SlotAssignOpExpr)) {
+					lhsExpr = cast lhs;
+					lhs = lhsExpr.expr;
+					lhsAssign = true;
+				}
+
 				var op = advance(); // Consume the operator
 				var rhs = bitwiseExp();
 				if (rhs == null)
@@ -1137,7 +1158,12 @@ class Parser {
 					rhs = new FloatBinaryExpr(rhs, rhs2, op2);
 				}
 
-				return rhs;
+				if (lhsAssign) {
+					lhsExpr.expr = rhs;
+					return lhsExpr;
+				} else {
+					return rhs;
+				}
 			} else {
 				return lhs;
 			}
@@ -1147,6 +1173,16 @@ class Parser {
 			var lhs = factorExp();
 
 			if (match([TokenType.Plus, TokenType.Minus])) {
+				var lhsExpr:Dynamic = null;
+
+				var lhsAssign = false;
+				if (Std.isOfType(lhs, AssignExpr) || Std.isOfType(lhs, AssignOpExpr) || Std.isOfType(lhs, SlotAssignExpr)
+					|| Std.isOfType(lhs, SlotAssignOpExpr)) {
+					lhsExpr = cast lhs;
+					lhs = lhsExpr.expr;
+					lhsAssign = true;
+				}
+
 				var op = advance(); // Consume the plus/minus operator
 				var rhs = termExp();
 				if (rhs == null)
@@ -1161,7 +1197,12 @@ class Parser {
 					rhs = new FloatBinaryExpr(rhs, rhs2, op2);
 				}
 
-				return rhs;
+				if (lhsAssign) {
+					lhsExpr.expr = rhs;
+					return lhsExpr;
+				} else {
+					return rhs;
+				}
 			} else {
 				return lhs;
 			}
@@ -1172,6 +1213,16 @@ class Parser {
 
 			if (match([TokenType.QuestionMark])) {
 				advance();
+				var lhsExpr:Dynamic = null;
+
+				var lhsAssign = false;
+				if (Std.isOfType(lhs, AssignExpr) || Std.isOfType(lhs, AssignOpExpr) || Std.isOfType(lhs, SlotAssignExpr)
+					|| Std.isOfType(lhs, SlotAssignOpExpr)) {
+					lhsExpr = cast lhs;
+					lhs = lhsExpr.expr;
+					lhsAssign = true;
+				}
+
 				var trueExpr = expression();
 				if (trueExpr == null)
 					throw new Exception("Expected true expression");
@@ -1179,7 +1230,12 @@ class Parser {
 				var falseExpr = expression();
 				if (falseExpr == null)
 					throw new Exception("Expected false expression");
-				return new ConditionalExpr(lhs, trueExpr, falseExpr);
+
+				if (lhsAssign) {
+					lhsExpr.expr = new ConditionalExpr(lhs, trueExpr, falseExpr);
+					return lhsExpr;
+				} else
+					return new ConditionalExpr(lhs, trueExpr, falseExpr);
 			} else {
 				return lhs;
 			}
@@ -1193,6 +1249,16 @@ class Parser {
 				TokenType.LessThanEqual,
 				TokenType.GreaterThanEqual
 			])) {
+				var lhsExpr:Dynamic = null;
+
+				var lhsAssign = false;
+				if (Std.isOfType(lhs, AssignExpr) || Std.isOfType(lhs, AssignOpExpr) || Std.isOfType(lhs, SlotAssignExpr)
+					|| Std.isOfType(lhs, SlotAssignOpExpr)) {
+					lhsExpr = cast lhs;
+					lhs = lhsExpr.expr;
+					lhsAssign = true;
+				}
+
 				var op = advance();
 				var rhs = ternaryExp();
 				if (rhs == null)
@@ -1213,7 +1279,12 @@ class Parser {
 					rhs = new IntBinaryExpr(rhs, rhs2, op2);
 				}
 
-				return rhs;
+				if (lhsAssign) {
+					lhsExpr.expr = rhs;
+					return lhsExpr;
+				} else {
+					return rhs;
+				}
 			} else {
 				return lhs;
 			}
@@ -1222,6 +1293,16 @@ class Parser {
 		function bitshiftExp():Expr {
 			var lhs = relationalExp();
 			if (match([TokenType.LeftBitShift, TokenType.RightBitShift])) {
+				var lhsExpr:Dynamic = null;
+
+				var lhsAssign = false;
+				if (Std.isOfType(lhs, AssignExpr) || Std.isOfType(lhs, AssignOpExpr) || Std.isOfType(lhs, SlotAssignExpr)
+					|| Std.isOfType(lhs, SlotAssignOpExpr)) {
+					lhsExpr = cast lhs;
+					lhs = lhsExpr.expr;
+					lhsAssign = true;
+				}
+
 				var op = advance();
 				var rhs = relationalExp();
 				if (rhs == null)
@@ -1237,7 +1318,12 @@ class Parser {
 					rhs = new IntBinaryExpr(rhs, rhs2, op2);
 				}
 
-				return rhs;
+				if (lhsAssign) {
+					lhsExpr.expr = rhs;
+					return lhsExpr;
+				} else {
+					return rhs;
+				}
 			} else
 				return lhs;
 		}
@@ -1245,6 +1331,16 @@ class Parser {
 		function logicalExp():Expr {
 			var lhs = bitshiftExp();
 			if (match([TokenType.LogicalAnd, TokenType.LogicalOr])) {
+				var lhsExpr:Dynamic = null;
+
+				var lhsAssign = false;
+				if (Std.isOfType(lhs, AssignExpr) || Std.isOfType(lhs, AssignOpExpr) || Std.isOfType(lhs, SlotAssignExpr)
+					|| Std.isOfType(lhs, SlotAssignOpExpr)) {
+					lhsExpr = cast lhs;
+					lhs = lhsExpr.expr;
+					lhsAssign = true;
+				}
+
 				var op = advance();
 				var rhs = bitshiftExp();
 				if (rhs == null)
@@ -1260,7 +1356,12 @@ class Parser {
 					rhs = new IntBinaryExpr(rhs, rhs2, op2);
 				}
 
-				return rhs;
+				if (lhsAssign) {
+					lhsExpr.expr = rhs;
+					return lhsExpr;
+				} else {
+					return rhs;
+				}
 			} else
 				return lhs;
 		}
@@ -1274,6 +1375,16 @@ class Parser {
 				TokenType.StringEquals,
 				TokenType.StringNotEquals
 			])) {
+				var lhsExpr:Dynamic = null;
+
+				var lhsAssign = false;
+				if (Std.isOfType(lhs, AssignExpr) || Std.isOfType(lhs, AssignOpExpr) || Std.isOfType(lhs, SlotAssignExpr)
+					|| Std.isOfType(lhs, SlotAssignOpExpr)) {
+					lhsExpr = cast lhs;
+					lhs = lhsExpr.expr;
+					lhsAssign = true;
+				}
+
 				var op = advance();
 				var rhs = logicalExp();
 				if (rhs == null)
@@ -1312,7 +1423,12 @@ class Parser {
 					}
 				}
 
-				return rhs;
+				if (lhsAssign) {
+					lhsExpr.expr = rhs;
+					return lhsExpr;
+				} else {
+					return rhs;
+				}
 			} else
 				return lhs;
 		}
@@ -1326,6 +1442,16 @@ class Parser {
 				TokenType.SpaceConcat,
 				TokenType.NewlineConcat
 			])) {
+				var lhsExpr:Dynamic = null;
+
+				var lhsAssign = false;
+				if (Std.isOfType(lhs, AssignExpr) || Std.isOfType(lhs, AssignOpExpr) || Std.isOfType(lhs, SlotAssignExpr)
+					|| Std.isOfType(lhs, SlotAssignOpExpr)) {
+					lhsExpr = cast lhs;
+					lhs = lhsExpr.expr;
+					lhsAssign = true;
+				}
+
 				var op = advance();
 				var rhs = equalityExp();
 				if (rhs == null)
@@ -1345,7 +1471,12 @@ class Parser {
 					rhs = new StrCatExpr(rhs, rhs2, op2);
 				}
 
-				return rhs;
+				if (lhsAssign) {
+					lhsExpr.expr = rhs;
+					return lhsExpr;
+				} else {
+					return rhs;
+				}
 			} else
 				return lhs;
 		}
