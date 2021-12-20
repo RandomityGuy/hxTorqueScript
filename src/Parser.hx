@@ -203,14 +203,15 @@ class Parser {
 
 	function returnStmt():ReturnStmt {
 		if (match([TokenType.Return])) {
+			var line = peek().line;
 			advance(); // Consume the return
 			if (match([TokenType.Semicolon])) {
 				advance(); // Consume the semicolon
-				return new ReturnStmt(null);
+				return new ReturnStmt(line, null);
 			} else {
 				var expr = expression();
 				consume(TokenType.Semicolon, "Expected ';' after return expression");
-				return new ReturnStmt(expr);
+				return new ReturnStmt(line, expr);
 			}
 		} else {
 			return null;
@@ -219,9 +220,10 @@ class Parser {
 
 	function continueStmt():ContinueStmt {
 		if (match([TokenType.Continue])) {
+			var line = peek().line;
 			advance(); // Consume the continue
 			consume(TokenType.Semicolon, "Expected ';' after continue");
-			return new ContinueStmt();
+			return new ContinueStmt(line);
 		} else {
 			return null;
 		}
@@ -229,9 +231,10 @@ class Parser {
 
 	function breakStmt():BreakStmt {
 		if (match([TokenType.Break])) {
+			var line = peek().line;
 			advance(); // Consume the break
 			consume(TokenType.Semicolon, "Expected ';' after break");
-			return new BreakStmt();
+			return new BreakStmt(line);
 		} else {
 			return null;
 		}
@@ -239,6 +242,7 @@ class Parser {
 
 	function switchStmt():IfStmt {
 		if (match([TokenType.Switch])) {
+			var switchLine = peek().line;
 			advance();
 			var isStringSwitch = false;
 			if (match([TokenType.Dollar])) {
@@ -282,11 +286,12 @@ class Parser {
 				}
 			}
 
-			var ifStmt = new IfStmt(generateCaseCheckExpr(cases), cases.stmts, null);
+			var ifStmt = new IfStmt(switchLine, generateCaseCheckExpr(cases), cases.stmts, null);
 
 			var itrIf = ifStmt;
 			while (cases.next != null) {
-				itrIf.elseBlock = [new IfStmt(generateCaseCheckExpr(cases.next), cases.next.stmts, null)];
+				var cond = generateCaseCheckExpr(cases.next);
+				itrIf.elseBlock = [new IfStmt(cond.lineNo, cond, cases.next.stmts, null)];
 				itrIf = cast itrIf.elseBlock[0];
 				cases = cases.next;
 
@@ -377,7 +382,7 @@ class Parser {
 			consume(TokenType.RBracket, "Expected '}' after datablock body");
 			consume(TokenType.Semicolon, "Expected ';' after datablock body");
 
-			var dbdecl = new ObjectDeclExpr(new ConstantExpr(name), parentName, new ConstantExpr(name), [], slots, [], true);
+			var dbdecl = new ObjectDeclExpr(new ConstantExpr(className), parentName, new ConstantExpr(name), [], slots, [], true);
 			dbdecl.structDecl = true;
 			return dbdecl;
 		} else {
@@ -437,6 +442,7 @@ class Parser {
 
 	function forStmt():LoopStmt {
 		if (match([TokenType.For])) {
+			var forLine = peek().line;
 			advance();
 			consume(TokenType.LParen, "Expected '(' after 'for'");
 			var initExpr = expression();
@@ -454,7 +460,7 @@ class Parser {
 			} else
 				body = [stmt()];
 
-			return new LoopStmt(condExpr, initExpr, iterExpr, body);
+			return new LoopStmt(forLine, condExpr, initExpr, iterExpr, body);
 		} else {
 			return null;
 		}
@@ -462,6 +468,7 @@ class Parser {
 
 	function whileStmt():LoopStmt {
 		if (match([TokenType.While])) {
+			var whileLine = peek().line;
 			advance();
 			consume(TokenType.LParen, "Expected '(' after 'while'");
 			var condExpr = expression();
@@ -475,7 +482,7 @@ class Parser {
 			} else
 				body = [stmt()];
 
-			return new LoopStmt(condExpr, null, null, body);
+			return new LoopStmt(whileLine, condExpr, null, null, body);
 		} else {
 			return null;
 		}
@@ -483,6 +490,7 @@ class Parser {
 
 	function ifStmt():IfStmt {
 		if (match([TokenType.If])) {
+			var ifLine = peek().line;
 			advance();
 			consume(TokenType.LParen, "Expected '(' after 'if'");
 			var condExpr = expression();
@@ -507,7 +515,7 @@ class Parser {
 					elseBody = [stmt()];
 			}
 
-			return new IfStmt(condExpr, body, elseBody);
+			return new IfStmt(ifLine, condExpr, body, elseBody);
 		} else {
 			return null;
 		}
@@ -832,25 +840,27 @@ class Parser {
 				return varExpr;
 			} else if (match([TokenType.String])) {
 				var str = advance();
-				return new StringConstExpr(str.literal, false);
+				return new StringConstExpr(str.line, str.literal, false);
 			} else if (match([TokenType.TaggedString])) {
 				var str = advance();
-				return new StringConstExpr(str.literal, true);
+				return new StringConstExpr(str.line, str.literal, true);
 			} else if (match([TokenType.Label, TokenType.Break])) {
 				var label = advance();
 				return new ConstantExpr(label);
 			} else if (match([TokenType.Int])) {
 				var intTok = advance();
-				return new IntExpr(Std.parseInt(intTok.literal));
+				return new IntExpr(intTok.line, Std.parseInt(intTok.literal));
 			} else if (match([TokenType.Float])) {
 				var floatTok = advance();
-				return new FloatExpr(Std.parseFloat(floatTok.literal));
+				return new FloatExpr(floatTok.line, Std.parseFloat(floatTok.literal));
 			} else if (match([TokenType.True])) {
+				var trueLine = peek().line;
 				advance();
-				return new IntExpr(1);
+				return new IntExpr(trueLine, 1);
 			} else if (match([TokenType.False])) {
+				var falseLine = peek().line;
 				advance();
-				return new IntExpr(0);
+				return new IntExpr(falseLine, 0);
 			} else
 				return null;
 		}

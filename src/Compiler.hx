@@ -1,5 +1,6 @@
 package;
 
+import haxe.io.BytesInput;
 import expr.OpCode;
 import haxe.Exception;
 import expr.Expr.Stmt;
@@ -27,7 +28,8 @@ typedef StringTableEntry = {
 
 class StringTable {
 	var totalLen:Int;
-	var entries:Array<StringTableEntry> = [];
+
+	public var entries:Array<StringTableEntry> = [];
 
 	public function new() {}
 
@@ -44,8 +46,9 @@ class StringTable {
 		}
 
 		var len = str.length + 1;
-		if (tag && len < 7)
+		if (tag && len < 7) {
 			len = 7;
+		}
 
 		var addEntry:StringTableEntry = {
 			start: totalLen,
@@ -68,12 +71,42 @@ class StringTable {
 				bytesData.addByte(entry.string.charCodeAt(c));
 			}
 			bytesData.addByte(0); // The null terminator
+			if (entry.len > entry.string.length) { // Well gotta pad the shit with zeros
+				for (i in 0...entry.len - entry.string.length - 1) {
+					bytesData.addByte(0);
+				}
+			}
+		}
+	}
+
+	public function read(bytesInput:BytesInput) {
+		totalLen = bytesInput.readInt32();
+		var currentStr = "";
+		var curStrLen = 0;
+		var curStrStart = 0;
+		for (i in 0...totalLen) {
+			var c = bytesInput.readByte();
+			if (c == 0) {
+				var entry = {
+					start: curStrStart,
+					len: curStrLen + 1,
+					string: currentStr,
+					tag: false
+				}
+				curStrLen = 0;
+				currentStr = "";
+				curStrStart = i + 1;
+				this.entries.push(entry);
+			} else {
+				currentStr += String.fromCharCode(c);
+				curStrLen++;
+			}
 		}
 	}
 }
 
 class IdentTable {
-	var identMap:Map<Int, Array<Int>> = [];
+	public var identMap:Map<Int, Array<Int>> = [];
 
 	public function new() {}
 
@@ -97,6 +130,18 @@ class IdentTable {
 			bytesData.addInt32(kv.value.length);
 			for (i in kv.value)
 				bytesData.addInt32(i);
+		}
+	}
+
+	public function read(bytesInput:BytesInput) {
+		var count = bytesInput.readInt32();
+		for (i in 0...count) {
+			var key = bytesInput.readInt32();
+			var len = bytesInput.readInt32();
+			var arr = [];
+			for (j in 0...len)
+				arr.push(bytesInput.readInt32());
+			identMap.set(key, arr);
 		}
 	}
 }

@@ -2,3 +2,5 @@ bruh
 mb
 .vscode
 *.g4
+*.dso
+*.disasm

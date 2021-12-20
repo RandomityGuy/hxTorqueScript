@@ -21,6 +21,12 @@ typedef CaseExpr = {
 class Stmt {
 	static var recursion = 0;
 
+	var lineNo:Int;
+
+	public function new(lineNo:Int) {
+		this.lineNo = lineNo;
+	}
+
 	function precompileStmt(compiler:Compiler, loopCount:Int) {
 		return 0;
 	}
@@ -40,7 +46,7 @@ class Stmt {
 			var line = compiler.breakLineCount * 2;
 			compiler.breakLineCount++;
 			if (context.lineBreakPairSize != 0) {
-				context.lineBreakPairs[line] = 0;
+				context.lineBreakPairs[line] = lineNo;
 				context.lineBreakPairs[line + 1] = ip;
 			}
 		}
@@ -69,7 +75,9 @@ class Stmt {
 
 @:publicFields
 class BreakStmt extends Stmt {
-	public function new() {}
+	public function new(lineNo:Int) {
+		super(lineNo);
+	}
 
 	public override function precompileStmt(compiler:Compiler, loopCount:Int):Int {
 		// JMP
@@ -94,7 +102,9 @@ class BreakStmt extends Stmt {
 
 @:publicFields
 class ContinueStmt extends Stmt {
-	public function new() {}
+	public function new(lineNo:Int) {
+		super(lineNo);
+	}
 
 	public override function precompileStmt(compiler:Compiler, loopCount:Int):Int {
 		// JMP
@@ -119,7 +129,9 @@ class ContinueStmt extends Stmt {
 
 @:publicFields
 class Expr extends Stmt {
-	public function new() {}
+	public function new(lineNo:Int) {
+		super(lineNo);
+	}
 
 	public override function precompileStmt(compiler:Compiler, loopCount:Int):Int {
 		this.addBreakCount(compiler);
@@ -191,7 +203,8 @@ class Expr extends Stmt {
 class ReturnStmt extends Stmt {
 	var expr:Null<Expr>;
 
-	public function new(expr:Null<Expr>) {
+	public function new(lineNo:Int, expr:Null<Expr>) {
+		super(lineNo);
 		this.expr = expr;
 	}
 
@@ -229,7 +242,8 @@ class IfStmt extends Stmt {
 	var endifOffset:Int;
 	var elseOffset:Int;
 
-	public function new(condition:Expr, body:Array<Stmt>, elseBlock:Array<Stmt>) {
+	public function new(lineNo:Int, condition:Expr, body:Array<Stmt>, elseBlock:Array<Stmt>) {
+		super(lineNo);
 		this.condition = condition;
 		this.body = body;
 		this.elseBlock = elseBlock;
@@ -300,7 +314,8 @@ class LoopStmt extends Stmt {
 	var continueOffset:Int;
 	var breakOffset:Int;
 
-	public function new(condition:Expr, init:Expr, end:Expr, body:Array<Stmt>) {
+	public function new(lineNo:Int, condition:Expr, init:Expr, end:Expr, body:Array<Stmt>) {
+		super(lineNo);
 		this.condition = condition;
 		this.init = init;
 		this.end = end;
@@ -381,7 +396,7 @@ class BinaryExpr extends Expr {
 @:publicFields
 class FloatBinaryExpr extends BinaryExpr {
 	public function new(left:Expr, right:Expr, op:Token) {
-		super();
+		super(left.lineNo);
 		this.left = left;
 		this.right = right;
 		this.op = op;
@@ -439,7 +454,7 @@ class IntBinaryExpr extends BinaryExpr {
 	var operand:OpCode;
 
 	public function new(left:Expr, right:Expr, op:Token) {
-		super();
+		super(left.lineNo);
 		this.left = left;
 		this.right = right;
 		this.op = op;
@@ -513,7 +528,7 @@ class IntBinaryExpr extends BinaryExpr {
 @:publicFields
 class StrEqExpr extends BinaryExpr {
 	public function new(left:Expr, right:Expr, op:Token) {
-		super();
+		super(left.lineNo);
 		this.left = left;
 		this.right = right;
 		this.op = op;
@@ -560,7 +575,7 @@ class StrEqExpr extends BinaryExpr {
 @:publicFields
 class StrCatExpr extends BinaryExpr {
 	public function new(left:Expr, right:Expr, op:Token) {
-		super();
+		super(left.lineNo);
 		this.left = left;
 		this.right = right;
 		this.op = op;
@@ -625,7 +640,7 @@ class StrCatExpr extends BinaryExpr {
 @:publicFields
 class CommaCatExpr extends BinaryExpr {
 	public function new(left:Expr, right:Expr) {
-		super();
+		super(left.lineNo);
 		this.left = left;
 		this.right = right;
 	}
@@ -674,7 +689,7 @@ class ConditionalExpr extends Expr {
 	var integer:Bool;
 
 	public function new(condition:Expr, trueExpr:Expr, falseExpr:Expr) {
-		super();
+		super(condition.lineNo);
 		this.condition = condition;
 		this.trueExpr = trueExpr;
 		this.falseExpr = falseExpr;
@@ -728,7 +743,7 @@ class IntUnaryExpr extends Expr {
 	var integer:Bool;
 
 	public function new(expr:Expr, op:Token) {
-		super();
+		super(expr.lineNo);
 		this.expr = expr;
 		this.op = op;
 	}
@@ -773,7 +788,7 @@ class FloatUnaryExpr extends Expr {
 	var op:Token;
 
 	public function new(expr:Expr, op:Token) {
-		super();
+		super(expr.lineNo);
 		this.expr = expr;
 		this.op = op;
 	}
@@ -816,7 +831,7 @@ class VarExpr extends Expr {
 	var type:VarType;
 
 	function new(name:Token, arrayIndex:Null<Expr>, type:VarType) {
-		super();
+		super(name.line);
 		this.name = name;
 		this.arrayIndex = arrayIndex;
 		this.type = type;
@@ -884,8 +899,8 @@ class IntExpr extends Expr {
 
 	var index:Int;
 
-	public function new(value:Int) {
-		super();
+	public function new(lineNo:Int, value:Int) {
+		super(lineNo);
 		this.value = value;
 	}
 
@@ -932,8 +947,8 @@ class FloatExpr extends Expr {
 
 	var index:Int;
 
-	public function new(value:Float) {
-		super();
+	public function new(lineNo:Int, value:Float) {
+		super(lineNo);
 		this.value = value;
 	}
 
@@ -982,8 +997,8 @@ class StringConstExpr extends Expr {
 	var fVal:Float;
 	var index:Int;
 
-	public function new(value:String, tag:Bool) {
-		super();
+	public function new(lineNo:Int, value:String, tag:Bool) {
+		super(lineNo);
 		this.value = value;
 		this.tag = tag;
 	}
@@ -1038,7 +1053,7 @@ class ConstantExpr extends Expr {
 	var index:Int;
 
 	public function new(name:Token) {
-		super();
+		super(name.line);
 		this.name = name;
 	}
 
@@ -1093,7 +1108,7 @@ class AssignExpr extends Expr {
 	var subType:TypeReq;
 
 	public function new(varExpr:VarExpr, expr:Expr) {
-		super();
+		super(varExpr.lineNo);
 		this.varExpr = varExpr;
 		this.expr = expr;
 	}
@@ -1226,12 +1241,12 @@ class AssignOpExpr extends Expr {
 			case PlusPlus:
 				subType = ReqFloat;
 				operand = Add;
-				expr = new IntExpr(1);
+				expr = new IntExpr(this.lineNo, 1);
 
 			case MinusMinus:
 				subType = ReqFloat;
 				operand = Sub;
-				expr = new IntExpr(1);
+				expr = new IntExpr(this.lineNo, 1);
 
 			default:
 				throw new Exception("Unknown assignment expression");
@@ -1239,7 +1254,7 @@ class AssignOpExpr extends Expr {
 	}
 
 	public function new(varExpr:VarExpr, expr:Expr, op:Token) {
-		super();
+		super(varExpr.lineNo);
 		this.varExpr = varExpr;
 		this.expr = expr;
 		this.op = op;
@@ -1307,7 +1322,7 @@ class FuncCallExpr extends Expr {
 	var callType:FuncCallType;
 
 	public function new(name:Token, namespace:Token, args:Array<Expr>, callType:FuncCallType) {
-		super();
+		super(name.line);
 		this.name = name;
 		this.namespace = namespace;
 		this.args = args;
@@ -1363,7 +1378,7 @@ class SlotAccessExpr extends Expr {
 	var slotName:Token;
 
 	public function new(objectExpr:Expr, arrayExpr:Expr, slotName:Token) {
-		super();
+		super(objectExpr.lineNo);
 		this.objectExpr = objectExpr;
 		this.arrayExpr = arrayExpr;
 		this.slotName = slotName;
@@ -1443,7 +1458,7 @@ class SlotAssignExpr extends Expr {
 	var expr:Expr;
 
 	public function new(objectExpr:Expr, arrayExpr:Expr, slotName:Token, expr:Expr) {
-		super();
+		super(slotName.line);
 		this.objectExpr = objectExpr;
 		this.arrayExpr = arrayExpr;
 		this.slotName = slotName;
@@ -1562,12 +1577,12 @@ class SlotAssignOpExpr extends Expr {
 			case PlusPlus:
 				subType = ReqFloat;
 				operand = Add;
-				expr = new IntExpr(1);
+				expr = new IntExpr(lineNo, 1);
 
 			case MinusMinus:
 				subType = ReqFloat;
 				operand = Sub;
-				expr = new IntExpr(1);
+				expr = new IntExpr(lineNo, 1);
 
 			default:
 				throw new Exception("Unknown assignment expression");
@@ -1575,7 +1590,7 @@ class SlotAssignOpExpr extends Expr {
 	}
 
 	public function new(objectExpr:Expr, arrayExpr:Expr, slotName:Token, expr:Expr, op:Token) {
-		super();
+		super(objectExpr.lineNo);
 		this.objectExpr = objectExpr;
 		this.arrayExpr = arrayExpr;
 		this.slotName = slotName;
@@ -1642,10 +1657,10 @@ class ObjectDeclExpr extends Expr {
 
 	public function new(className:Expr, parentObject:Token, objectNameExpr:Expr, args:Array<Expr>, slotDecls:Array<SlotAssignExpr>,
 			subObjects:Array<ObjectDeclExpr>, structDecl:Bool) {
-		super();
+		super(className.lineNo);
 		this.className = className;
 		this.parentObject = parentObject;
-		this.objectNameExpr = (objectNameExpr != null) ? objectNameExpr : new StringConstExpr("", false);
+		this.objectNameExpr = (objectNameExpr != null) ? objectNameExpr : new StringConstExpr(lineNo, "", false);
 		this.args = args;
 		this.slotDecls = slotDecls;
 		this.subObjects = subObjects;
@@ -1736,6 +1751,7 @@ class FunctionDeclStmt extends Stmt {
 	var argc:Int;
 
 	public function new(functionName:Token, args:Array<VarExpr>, stmts:Array<Stmt>, namespace:Token) {
+		super(functionName.line);
 		this.functionName = functionName;
 		this.args = args;
 		this.stmts = stmts;
