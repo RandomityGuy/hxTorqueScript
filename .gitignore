@@ -4,3 +4,8 @@ mb
 *.g4
 *.dso
 *.disasm
+*.bat
+*.txt
+bin
+*.exe
+*.obj

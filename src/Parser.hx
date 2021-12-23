@@ -802,15 +802,26 @@ class Parser {
 				advance();
 				var subexpr = expression();
 				consume(TokenType.RParen, "Expected ')' after expression");
-				return subexpr;
+				return new ParenthesisExpr(subexpr);
 			} else if (match([TokenType.Minus])) {
 				var tok = advance();
 				var subexpr = expression();
-				return new FloatUnaryExpr(subexpr, tok);
+
+				if (Std.isOfType(subexpr, IntBinaryExpr) || Std.isOfType(subexpr, FloatBinaryExpr)) {
+					var bexpr = cast(subexpr, BinaryExpr);
+					bexpr.left = new FloatUnaryExpr(bexpr.left, tok);
+					return bexpr;
+				} else
+					return new FloatUnaryExpr(subexpr, tok);
 			} else if (match([TokenType.Not, TokenType.Tilde])) {
 				var tok = advance();
 				var subexpr = expression();
-				return new IntUnaryExpr(subexpr, tok);
+				if (Std.isOfType(subexpr, IntBinaryExpr) || Std.isOfType(subexpr, FloatBinaryExpr)) {
+					var bexpr = cast(subexpr, BinaryExpr);
+					bexpr.left = new IntUnaryExpr(bexpr.left, tok);
+					return bexpr;
+				} else
+					return new IntUnaryExpr(subexpr, tok);
 			} else if (match([TokenType.Modulus, TokenType.Dollar])) {
 				var varExpr = variable();
 				var varIdx:Expr = null;
@@ -1194,14 +1205,14 @@ class Parser {
 				}
 
 				var op = advance(); // Consume the plus/minus operator
-				var rhs = termExp();
+				var rhs = factorExp();
 				if (rhs == null)
 					throw new Exception("Expected expression after plus/minus operator");
 				rhs = new FloatBinaryExpr(lhs, rhs, op);
 
 				while (match([TokenType.Plus, TokenType.Minus])) {
 					var op2 = advance(); // Consume the plus/minus operator
-					var rhs2 = termExp();
+					var rhs2 = factorExp();
 					if (rhs2 == null)
 						throw new Exception("Expected expression after plus/minus operator");
 					rhs = new FloatBinaryExpr(rhs, rhs2, op2);
@@ -1218,41 +1229,8 @@ class Parser {
 			}
 		}
 
-		function ternaryExp():Expr {
-			var lhs = termExp();
-
-			if (match([TokenType.QuestionMark])) {
-				advance();
-				var lhsExpr:Dynamic = null;
-
-				var lhsAssign = false;
-				if (Std.isOfType(lhs, AssignExpr) || Std.isOfType(lhs, AssignOpExpr) || Std.isOfType(lhs, SlotAssignExpr)
-					|| Std.isOfType(lhs, SlotAssignOpExpr)) {
-					lhsExpr = cast lhs;
-					lhs = lhsExpr.expr;
-					lhsAssign = true;
-				}
-
-				var trueExpr = expression();
-				if (trueExpr == null)
-					throw new Exception("Expected true expression");
-				consume(TokenType.Colon, "Expected : after true expression");
-				var falseExpr = expression();
-				if (falseExpr == null)
-					throw new Exception("Expected false expression");
-
-				if (lhsAssign) {
-					lhsExpr.expr = new ConditionalExpr(lhs, trueExpr, falseExpr);
-					return lhsExpr;
-				} else
-					return new ConditionalExpr(lhs, trueExpr, falseExpr);
-			} else {
-				return lhs;
-			}
-		}
-
 		function relationalExp():Expr {
-			var lhs = ternaryExp();
+			var lhs = termExp();
 			if (match([
 				TokenType.LessThan,
 				TokenType.GreaterThan,
@@ -1270,7 +1248,7 @@ class Parser {
 				}
 
 				var op = advance();
-				var rhs = ternaryExp();
+				var rhs = termExp();
 				if (rhs == null)
 					throw new Exception("Expected right hand side");
 
@@ -1283,7 +1261,7 @@ class Parser {
 					TokenType.GreaterThanEqual
 				])) {
 					var op2 = advance();
-					var rhs2 = ternaryExp();
+					var rhs2 = termExp();
 					if (rhs2 == null)
 						throw new Exception("Expected right hand side");
 					rhs = new IntBinaryExpr(rhs, rhs2, op2);
@@ -1338,46 +1316,8 @@ class Parser {
 				return lhs;
 		}
 
-		function logicalExp():Expr {
-			var lhs = bitshiftExp();
-			if (match([TokenType.LogicalAnd, TokenType.LogicalOr])) {
-				var lhsExpr:Dynamic = null;
-
-				var lhsAssign = false;
-				if (Std.isOfType(lhs, AssignExpr) || Std.isOfType(lhs, AssignOpExpr) || Std.isOfType(lhs, SlotAssignExpr)
-					|| Std.isOfType(lhs, SlotAssignOpExpr)) {
-					lhsExpr = cast lhs;
-					lhs = lhsExpr.expr;
-					lhsAssign = true;
-				}
-
-				var op = advance();
-				var rhs = bitshiftExp();
-				if (rhs == null)
-					throw new Exception("Expected right hand side");
-
-				rhs = new IntBinaryExpr(lhs, rhs, op);
-
-				while (match([TokenType.LogicalAnd, TokenType.LogicalOr])) {
-					var op2 = advance();
-					var rhs2 = bitshiftExp();
-					if (rhs2 == null)
-						throw new Exception("Expected right hand side");
-					rhs = new IntBinaryExpr(rhs, rhs2, op2);
-				}
-
-				if (lhsAssign) {
-					lhsExpr.expr = rhs;
-					return lhsExpr;
-				} else {
-					return rhs;
-				}
-			} else
-				return lhs;
-		}
-
 		function equalityExp():Expr {
-			var lhs = logicalExp();
+			var lhs = bitshiftExp();
 
 			if (match([
 				TokenType.Equal,
@@ -1396,7 +1336,7 @@ class Parser {
 				}
 
 				var op = advance();
-				var rhs = logicalExp();
+				var rhs = bitshiftExp();
 				if (rhs == null)
 					throw new Exception("Expected right hand side");
 
@@ -1418,7 +1358,7 @@ class Parser {
 					TokenType.StringNotEquals
 				])) {
 					var op2 = advance();
-					var rhs2 = logicalExp();
+					var rhs2 = bitshiftExp();
 					if (rhs2 == null)
 						throw new Exception("Expected right hand side");
 					rhs = switch (op.type) {
@@ -1443,8 +1383,46 @@ class Parser {
 				return lhs;
 		}
 
-		function concatExp():Expr {
+		function logicalExp():Expr {
 			var lhs = equalityExp();
+			if (match([TokenType.LogicalAnd, TokenType.LogicalOr])) {
+				var lhsExpr:Dynamic = null;
+
+				var lhsAssign = false;
+				if (Std.isOfType(lhs, AssignExpr) || Std.isOfType(lhs, AssignOpExpr) || Std.isOfType(lhs, SlotAssignExpr)
+					|| Std.isOfType(lhs, SlotAssignOpExpr)) {
+					lhsExpr = cast lhs;
+					lhs = lhsExpr.expr;
+					lhsAssign = true;
+				}
+
+				var op = advance();
+				var rhs = equalityExp();
+				if (rhs == null)
+					throw new Exception("Expected right hand side");
+
+				rhs = new IntBinaryExpr(lhs, rhs, op);
+
+				while (match([TokenType.LogicalAnd, TokenType.LogicalOr])) {
+					var op2 = advance();
+					var rhs2 = equalityExp();
+					if (rhs2 == null)
+						throw new Exception("Expected right hand side");
+					rhs = new IntBinaryExpr(rhs, rhs2, op2);
+				}
+
+				if (lhsAssign) {
+					lhsExpr.expr = rhs;
+					return lhsExpr;
+				} else {
+					return rhs;
+				}
+			} else
+				return lhs;
+		}
+
+		function concatExp():Expr {
+			var lhs = logicalExp();
 
 			if (match([
 				TokenType.Concat,
@@ -1463,7 +1441,7 @@ class Parser {
 				}
 
 				var op = advance();
-				var rhs = equalityExp();
+				var rhs = logicalExp();
 				if (rhs == null)
 					throw new Exception("Expected right hand side");
 				rhs = new StrCatExpr(lhs, rhs, op);
@@ -1475,7 +1453,7 @@ class Parser {
 					TokenType.NewlineConcat
 				])) {
 					var op2 = advance();
-					var rhs2 = equalityExp();
+					var rhs2 = logicalExp();
 					if (rhs2 == null)
 						throw new Exception("Expected right hand side");
 					rhs = new StrCatExpr(rhs, rhs2, op2);
@@ -1491,7 +1469,42 @@ class Parser {
 				return lhs;
 		}
 
-		return concatExp();
+		function ternaryExp():Expr {
+			var lhs = concatExp();
+
+			// Fix parsing abc = pqr == 1 ? 2 : 3 as abc = (pqr == (1 ? 2 : 3)))
+
+			if (match([TokenType.QuestionMark])) {
+				advance();
+				var lhsExpr:Dynamic = null;
+
+				var lhsAssign = false;
+				if (Std.isOfType(lhs, AssignExpr) || Std.isOfType(lhs, AssignOpExpr) || Std.isOfType(lhs, SlotAssignExpr)
+					|| Std.isOfType(lhs, SlotAssignOpExpr)) {
+					lhsExpr = cast lhs;
+					lhs = lhsExpr.expr;
+					lhsAssign = true;
+				}
+
+				var trueExpr = expression();
+				if (trueExpr == null)
+					throw new Exception("Expected true expression");
+				consume(TokenType.Colon, "Expected : after true expression");
+				var falseExpr = expression();
+				if (falseExpr == null)
+					throw new Exception("Expected false expression");
+
+				if (lhsAssign) {
+					lhsExpr.expr = new ConditionalExpr(lhs, trueExpr, falseExpr);
+					return lhsExpr;
+				} else
+					return new ConditionalExpr(lhs, trueExpr, falseExpr);
+			} else {
+				return lhs;
+			}
+		}
+
+		return ternaryExp();
 	}
 
 	function isAtEnd() {

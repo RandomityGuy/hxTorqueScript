@@ -1,0 +1,5 @@
+-cp src
+--hl bin/main.c
+
+--library hxparse
+--main Main

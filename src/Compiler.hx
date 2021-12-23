@@ -38,11 +38,15 @@ class StringTable {
 			if (e.tag != tag)
 				continue;
 
-			if (!caseSens) {
-				if (str.toLowerCase() == e.string.toLowerCase())
-					return e.start;
-			} else if (str == e.string)
+			if (str == "" && e.string == "") // Because fuck it, apparently this bugs out otherwise.
 				return e.start;
+			else {
+				if (!caseSens) {
+					if (str.toLowerCase() == e.string.toLowerCase())
+						return e.start;
+				} else if (str == e.string)
+					return e.start;
+			}
 		}
 
 		var len = str.length + 1;
@@ -173,7 +177,7 @@ class Compiler {
 	}
 
 	public function precompileIdent(ident:String) {
-		if (ident != null && ident != "")
+		if (ident != null)
 			globalStringTable.add(ident, true, false);
 	}
 
@@ -241,15 +245,15 @@ class Compiler {
 
 	public function compile(code:String) {
 		var statementList:Array<Stmt> = null;
-		try {
-			var scanner = new Scanner(code);
-			var toks = scanner.scanTokens();
-			var parser = new Parser(toks);
-			statementList = parser.parse();
-		} catch (e) {
-			trace(e.message);
-			return null;
-		}
+		// try {
+		var scanner = new Scanner(code);
+		var toks = scanner.scanTokens();
+		var parser = new Parser(toks);
+		statementList = parser.parse();
+		// } catch (e) {
+		// 	trace(e.message);
+		// 	return null;
+		// }
 
 		var outData = new BytesBuffer();
 		outData.addInt32(dsoVersion);

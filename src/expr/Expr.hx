@@ -200,6 +200,31 @@ class Expr extends Stmt {
 }
 
 @:publicFields
+class ParenthesisExpr extends Expr {
+	var expr:Expr;
+
+	public function new(expr:Expr) {
+		super(expr.lineNo);
+		this.expr = expr;
+	}
+
+	public override function precompile(compiler:Compiler, typeReq:TypeReq):Int {
+		var size = this.expr.precompile(compiler, typeReq);
+		return size;
+	}
+
+	public override function compile(compiler:Compiler, context:Compiler.CompileContext, typeReq:TypeReq):Int {
+		var size = this.expr.compile(compiler, context, typeReq);
+		context.ip = size;
+		return size;
+	}
+
+	public override function getPrefferredType():TypeReq {
+		return expr.getPrefferredType();
+	}
+}
+
+@:publicFields
 class ReturnStmt extends Stmt {
 	var expr:Null<Expr>;
 
@@ -1336,7 +1361,7 @@ class FuncCallExpr extends Expr {
 			size++;
 
 		compiler.precompileIdent(name.literal);
-		compiler.precompileIdent(namespace != null ? namespace.literal : "");
+		compiler.precompileIdent(namespace != null ? namespace.literal : null);
 
 		for (i in 0...args.length) {
 			size += args[i].precompile(compiler, ReqString) + 1;
@@ -1703,6 +1728,7 @@ class ObjectDeclExpr extends Expr {
 			context.codeStream[context.ip++] = cast OpCode.Push;
 		}
 		context.codeStream[context.ip++] = cast OpCode.CreateObject;
+
 		context.codeStream[context.ip] = compiler.compileIdent(parentObject != null ? parentObject.literal : "", context.ip);
 		context.ip++;
 		context.codeStream[context.ip++] = cast structDecl;
@@ -1767,8 +1793,8 @@ class FunctionDeclStmt extends Stmt {
 		compiler.inFunction = true;
 
 		compiler.precompileIdent(functionName.literal);
-		compiler.precompileIdent(namespace != null ? namespace.literal : "");
-		compiler.precompileIdent(packageName != null ? packageName.literal : "");
+		compiler.precompileIdent(namespace != null ? namespace.literal : null);
+		compiler.precompileIdent(packageName != null ? packageName.literal : null);
 
 		var subSize = Stmt.precompileBlock(compiler, stmts, 0);
 		compiler.inFunction = false;

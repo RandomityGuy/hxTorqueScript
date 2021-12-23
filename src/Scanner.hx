@@ -211,8 +211,26 @@ class Scanner {
 		advance();
 
 		// Trim the surrounding quotes.
-		var value = source.substring(start + 1, current - 1);
+		var value = unescape(source.substring(start + 1, current - 1));
 		addToken(tokenType, value);
+	}
+
+	function unescape(s:String) {
+		var escapeMap = [
+			"\\t" => "\t", "\\n" => "\n", "\\r" => "\r", "\\\"" => "\"", "\\'" => "'", "\\\\" => "\\", "\\c0" => "\x02", "\\c1" => "\x03", "\\c2" => "\x04",
+			"\\c3" => "\x05", "\\c4" => "\x06", "\\c5" => "\x07", "\\c6" => "\x08", "\\c7" => "\x0B", "\\c8" => "\x0C", "\\c9" => "\x0E"
+		];
+		for (o => esc in escapeMap) {
+			s = StringTools.replace(s, o, esc);
+		}
+		var newStr = s;
+		while (newStr.indexOf("\\x") != -1) {
+			var hexString = s.substring(s.indexOf("\\x") + 2, s.indexOf("\\x") + 4);
+			var intValue = Std.parseInt("0x" + hexString);
+			newStr = s.substring(0, s.indexOf("\\x")) + String.fromCharCode(intValue) + s.substring(s.indexOf("\\x") + 4);
+		}
+
+		return newStr;
 	}
 
 	function isDigit(c:String):Bool {
