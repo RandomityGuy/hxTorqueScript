@@ -1815,7 +1815,7 @@ class FunctionDeclStmt extends Stmt {
 		context.ip++;
 		context.codeStream[context.ip] = compiler.compileIdent(packageName != null ? packageName.literal : null, context.ip);
 		context.ip++;
-		context.codeStream[context.ip++] = cast stmts != null;
+		context.codeStream[context.ip++] = cast stmts.length != 0;
 		context.codeStream[context.ip++] = start + endOffset;
 		context.codeStream[context.ip++] = argc;
 		for (arg in args) {

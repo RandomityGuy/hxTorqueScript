@@ -178,7 +178,7 @@ class Compiler {
 
 	public function precompileIdent(ident:String) {
 		if (ident != null)
-			globalStringTable.add(ident, true, false);
+			globalStringTable.add(ident, false, false);
 	}
 
 	public function compileIdent(ident:String, ip:Int) {

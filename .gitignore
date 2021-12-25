@@ -9,3 +9,5 @@ mb
 bin
 *.exe
 *.obj
+*.y
+*.hl
