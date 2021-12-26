@@ -1,5 +1,4 @@
 -cp src
 --hl bin/main.hl
 
---library hxparse
 --main Main
