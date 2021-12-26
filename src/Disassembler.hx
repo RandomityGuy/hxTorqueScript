@@ -18,6 +18,13 @@ enum LineType {
 	Code;
 }
 
+enum DisassemblyVerbosity {
+	Code;
+	Args;
+	ConstTables;
+	ConstTableReferences;
+}
+
 abstract class DissassemblyData {}
 
 @:publicFields
@@ -53,7 +60,6 @@ class Disassembler {
 	var currentFloatTable:Array<Float>;
 	var globalStringTable:Compiler.StringTable = new Compiler.StringTable();
 	var functionStringTable:Compiler.StringTable = new Compiler.StringTable();
-	var currentStringTable:Compiler.StringTable;
 	var identTable:Compiler.IdentTable = new Compiler.IdentTable();
 	var dsoVersion = 33;
 	var codeStream:Array<Int> = [];
@@ -140,6 +146,14 @@ class Disassembler {
 			for (e in functionStringTable.entries) {
 				if (e.start == index)
 					return functionStringTable.entries.indexOf(e);
+			}
+
+			for (i in 0...functionStringTable.entries.length) {
+				var e = functionStringTable.entries[i];
+				if (e.start < index
+					&& (i == functionStringTable.entries.length - 1) ? true : functionStringTable.entries[i + 1].start > index) {
+					return i;
+				}
 			}
 		}
 
@@ -447,65 +461,75 @@ class Disassembler {
 		return totalDism;
 	}
 
-	public function writeDisassembly(lines:Array<DisassmblyLine>) {
-		var output = "";
+	public function writeDisassembly(lines:Array<DisassmblyLine>, outputVerbosity:haxe.EnumFlags<DisassemblyVerbosity>) {
+		var output = new StringBuf();
 
 		for (line in lines) {
 			switch (line.type) {
 				case GlobalStringTable:
 					var strData:DisassemblyConst<String> = cast line.args[0];
-					output += "GlobalStringTable::" + StringTools.lpad('${line.lineNo}', "0", 5) + ": " + strData.value + "\n";
+					if (outputVerbosity.has(DisassemblyVerbosity.ConstTables))
+						output.add("GlobalStringTable::" + StringTools.lpad('${line.lineNo}', "0", 5) + ": " + strData.value + "\n");
 
 				case FunctionStringTable:
 					var strData:DisassemblyConst<String> = cast line.args[0];
-					output += "FunctionStringTable::" + StringTools.lpad('${line.lineNo}', "0", 5) + ": " + strData.value + "\n";
+					if (outputVerbosity.has(DisassemblyVerbosity.ConstTables))
+						output.add("FunctionStringTable::" + StringTools.lpad('${line.lineNo}', "0", 5) + ": " + strData.value + "\n");
 
 				case GlobalFloatTable:
 					var strData:DisassemblyConst<Float> = cast line.args[0];
-					output += "GlobalFloatTable::" + StringTools.lpad('${line.lineNo}', "0", 5) + ": " + strData.value + "\n";
+					if (outputVerbosity.has(DisassemblyVerbosity.ConstTables))
+						output.add("GlobalFloatTable::" + StringTools.lpad('${line.lineNo}', "0", 5) + ": " + strData.value + "\n");
 
 				case FunctionFloatTable:
 					var strData:DisassemblyConst<Float> = cast line.args[0];
-					output += "FunctionFloatTable::" + StringTools.lpad('${line.lineNo}', "0", 5) + ": " + strData.value + "\n";
+					if (outputVerbosity.has(DisassemblyVerbosity.ConstTables))
+						output.add("FunctionFloatTable::" + StringTools.lpad('${line.lineNo}', "0", 5) + ": " + strData.value + "\n");
 
 				case Code:
 					var args = "";
 
-					for (arg in line.args) {
-						if (Std.isOfType(arg, DisassemblyReference)) {
-							var ref:DisassemblyReference = cast arg;
-							var refStr = switch (ref.referencesWhat) {
-								case GlobalStringTable:
-									"GlobalStringTable::" + StringTools.lpad('${ref.referenceIndex}', "0",
-										5) + '<-\"${this.globalStringTable.entries[ref.referenceIndex].string}"';
+					if (outputVerbosity.has(DisassemblyVerbosity.Args)) {
+						for (arg in line.args) {
+							if (Std.isOfType(arg, DisassemblyReference)) {
+								var ref:DisassemblyReference = cast arg;
+								var refStr = switch (ref.referencesWhat) {
+									case GlobalStringTable:
+										"GlobalStringTable::" + StringTools.lpad('${ref.referenceIndex}', "0",
+											5) +
+										(outputVerbosity.has(DisassemblyVerbosity.ConstTableReferences) ? '<-\"${this.globalStringTable.entries[ref.referenceIndex].string}"' : "");
 
-								case FunctionStringTable:
-									"FunctionStringTable::" + StringTools.lpad('${ref.referenceIndex}', "0",
-										5) + '<-\"${this.functionStringTable.entries[ref.referenceIndex].string}"';
+									case FunctionStringTable:
+										"FunctionStringTable::" + StringTools.lpad('${ref.referenceIndex}', "0",
+											5) +
+										(outputVerbosity.has(DisassemblyVerbosity.ConstTableReferences) ? '<-\"${this.functionStringTable.entries[ref.referenceIndex].string}"' : "");
 
-								case GlobalFloatTable:
-									"GlobalFloatTable::" + StringTools.lpad('${ref.referenceIndex}', "0",
-										5) + '<-\"${this.globalFloatTable[ref.referenceIndex]}"';
+									case GlobalFloatTable:
+										"GlobalFloatTable::" + StringTools.lpad('${ref.referenceIndex}', "0",
+											5) +
+										(outputVerbosity.has(DisassemblyVerbosity.ConstTableReferences) ? '<-\"${this.globalFloatTable[ref.referenceIndex]}"' : "");
 
-								case FunctionFloatTable:
-									"FunctionFloatTable::" + StringTools.lpad('${ref.referenceIndex}', "0",
-										5) + '<-\"${this.functionFloatTable[ref.referenceIndex]}"';
+									case FunctionFloatTable:
+										"FunctionFloatTable::" + StringTools.lpad('${ref.referenceIndex}', "0",
+											5) +
+										(outputVerbosity.has(DisassemblyVerbosity.ConstTableReferences) ? '<-\"${this.functionFloatTable[ref.referenceIndex]}"' : "");
 
-								case Code:
-									"Code::" + StringTools.lpad('${ref.referenceIndex}', "0", 5);
+									case Code:
+										"Code::" + StringTools.lpad('${ref.referenceIndex}', "0", 5);
+								}
+
+								args += refStr + " ";
+							} else if (Std.isOfType(arg, DisassemblyConst)) {
+								var c:DisassemblyConst<Int> = cast arg;
+								args += '${c.value}' + " ";
 							}
-
-							args += refStr + " ";
-						} else if (Std.isOfType(arg, DisassemblyConst)) {
-							var c:DisassemblyConst<Int> = cast arg;
-							args += '${c.value}' + " ";
 						}
 					}
 
-					output += "Code::" + StringTools.lpad('${line.lineNo}', "0", 5) + ": " + opCodeLookup.get(cast line.opCode) + " " + args + "\n";
+					output.add("Code::" + StringTools.lpad('${line.lineNo}', "0", 5) + ": " + opCodeLookup.get(cast line.opCode) + " " + args + "\n");
 			}
 		}
 
-		return output;
+		return output.toString();
 	}
 }

@@ -263,6 +263,10 @@ class Parser {
 
 			consume(TokenType.RBracket, "Expected '}' after switch body");
 
+			// TODO:
+			// Change the case OR expr to parse it as (expr || (expr || expr...)) instead of
+			// ((expr || expr) || expr)
+
 			function generateCaseCheckExpr(caseData:CaseExpr) {
 				var checkExpr:Expr = null;
 				if (isStringSwitch) {
@@ -288,15 +292,21 @@ class Parser {
 
 			var ifStmt = new IfStmt(switchLine, generateCaseCheckExpr(cases), cases.stmts, null);
 
-			var itrIf = ifStmt;
-			while (cases.next != null) {
-				var cond = generateCaseCheckExpr(cases.next);
-				itrIf.elseBlock = [new IfStmt(cond.lineNo, cond, cases.next.stmts, null)];
-				itrIf = cast itrIf.elseBlock[0];
-				cases = cases.next;
+			if (cases.next == null) {
+				if (cases.defaultStmts != null)
+					if (cases.defaultStmts.length != 0)
+						ifStmt.elseBlock = cases.defaultStmts;
+			} else {
+				var itrIf = ifStmt;
+				while (cases.next != null) {
+					var cond = generateCaseCheckExpr(cases.next);
+					itrIf.elseBlock = [new IfStmt(cond.lineNo, cond, cases.next.stmts, null)];
+					itrIf = cast itrIf.elseBlock[0];
+					cases = cases.next;
 
-				if (cases.defaultStmts != null) {
-					itrIf.elseBlock = cases.defaultStmts;
+					if (cases.defaultStmts != null) {
+						itrIf.elseBlock = cases.defaultStmts;
+					}
 				}
 			}
 
@@ -510,6 +520,8 @@ class Parser {
 				if (match([TokenType.LBracket])) {
 					advance();
 					elseBody = statementList();
+					if (elseBody.length == 0)
+						elseBody = null;
 					consume(TokenType.RBracket, "Expected '}' after else statement body");
 				} else
 					elseBody = [stmt()];
@@ -572,7 +584,7 @@ class Parser {
 						return new SlotAssignOpExpr(expr, arrAccess, labelAccess, rexpr, nextTok);
 
 					case TokenType.PlusPlus | TokenType.MinusMinus:
-						return new SlotAssignOpExpr(expr, arrAccess, labelAccess, null, nextTok);
+						return new ParenthesisExpr(new SlotAssignOpExpr(expr, arrAccess, labelAccess, null, nextTok));
 
 					case LParen:
 						if (arrAccess == null) {
@@ -629,7 +641,7 @@ class Parser {
 						return new AssignOpExpr(varExpr, rexpr, nextTok);
 
 					case TokenType.PlusPlus | TokenType.MinusMinus:
-						return new AssignOpExpr(varExpr, null, nextTok);
+						return new ParenthesisExpr(new AssignOpExpr(varExpr, null, nextTok));
 
 					case TokenType.Assign:
 						var rexpr = expression();
@@ -674,7 +686,7 @@ class Parser {
 						return new AssignOpExpr(varExpr, rexpr, nextTok);
 
 					case TokenType.PlusPlus | TokenType.MinusMinus:
-						return new AssignOpExpr(varExpr, null, nextTok);
+						return new ParenthesisExpr(new AssignOpExpr(varExpr, null, nextTok));
 
 					case TokenType.Assign:
 						var rexpr = expression();
@@ -813,6 +825,8 @@ class Parser {
 
 		var chainExpr:Void->Expr = null;
 
+		var ternaryExp:Void->Expr = null;
+
 		function primaryExpr():Expr {
 			if (match([TokenType.LParen])) {
 				advance();
@@ -929,17 +943,17 @@ class Parser {
 					switch (nextTok.type) {
 						case TokenType.Assign:
 							advance();
-							var rexpr = chainExpr();
+							var rexpr = ternaryExp();
 							chExpr = new SlotAssignExpr(expr, arrAccess, labelAccess, rexpr);
 
 						case TokenType.ShiftRightAssign | TokenType.OrAssign | TokenType.XorAssign | TokenType.AndAssign | TokenType.ModulusAssign | TokenType.DivideAssign | TokenType.MultiplyAssign | TokenType.MinusAssign | TokenType.PlusAssign:
 							advance();
-							var rexpr = chainExpr();
+							var rexpr = ternaryExp();
 							chExpr = new SlotAssignOpExpr(expr, arrAccess, labelAccess, rexpr, nextTok);
 
 						case TokenType.PlusPlus | TokenType.MinusMinus:
 							advance();
-							chExpr = new SlotAssignOpExpr(expr, arrAccess, labelAccess, null, nextTok);
+							chExpr = new ParenthesisExpr(new SlotAssignOpExpr(expr, arrAccess, labelAccess, null, nextTok));
 
 						case LParen:
 							advance();
@@ -973,16 +987,16 @@ class Parser {
 					switch (nextTok.type) {
 						case TokenType.ShiftRightAssign | TokenType.OrAssign | TokenType.XorAssign | TokenType.AndAssign | TokenType.ModulusAssign | TokenType.DivideAssign | TokenType.MultiplyAssign | TokenType.MinusAssign | TokenType.PlusAssign:
 							advance();
-							var rexpr = chainExpr();
+							var rexpr = ternaryExp();
 							chExpr = new AssignOpExpr(varExpr, rexpr, nextTok);
 
 						case TokenType.PlusPlus | TokenType.MinusMinus:
 							advance();
-							chExpr = new AssignOpExpr(varExpr, null, nextTok);
+							chExpr = new ParenthesisExpr(new AssignOpExpr(varExpr, null, nextTok));
 
 						case TokenType.Assign:
 							advance();
-							var rexpr = chainExpr();
+							var rexpr = ternaryExp();
 							chExpr = new AssignExpr(varExpr, rexpr);
 
 						default:
@@ -1094,17 +1108,17 @@ class Parser {
 					switch (nextTok.type) {
 						case TokenType.Assign:
 							advance();
-							var rexpr = chainExpr();
+							var rexpr = ternaryExp();
 							chExpr = new SlotAssignExpr(chExpr, arrAccess, label, rexpr);
 
 						case TokenType.ShiftRightAssign | TokenType.OrAssign | TokenType.XorAssign | TokenType.AndAssign | TokenType.ModulusAssign | TokenType.DivideAssign | TokenType.MultiplyAssign | TokenType.MinusAssign | TokenType.PlusAssign:
 							advance();
-							var rexpr = chainExpr();
+							var rexpr = ternaryExp();
 							chExpr = new SlotAssignOpExpr(chExpr, arrAccess, label, rexpr, nextTok);
 
 						case TokenType.PlusPlus | TokenType.MinusMinus:
 							advance();
-							chExpr = new SlotAssignOpExpr(chExpr, arrAccess, label, null, nextTok);
+							chExpr = new ParenthesisExpr(new SlotAssignOpExpr(chExpr, arrAccess, label, null, nextTok));
 
 						default:
 							chExpr = new SlotAccessExpr(chExpr, arrAccess, label);
@@ -1280,7 +1294,7 @@ class Parser {
 					var rhs2 = bitshiftExp();
 					if (rhs2 == null)
 						throw new Exception("Expected right hand side");
-					rhs = switch (op.type) {
+					rhs = switch (op2.type) {
 						case TokenType.Concat | TokenType.TabConcat | TokenType.SpaceConcat | TokenType.NewlineConcat:
 							new StrCatExpr(rhs, rhs2, op2);
 						case TokenType.StringEquals | TokenType.StringNotEquals:
@@ -1559,7 +1573,7 @@ class Parser {
 				return lhs;
 		}
 
-		function ternaryExp():Expr {
+		ternaryExp = () -> {
 			var lhs = logicalExp();
 
 			if (match([TokenType.QuestionMark])) {

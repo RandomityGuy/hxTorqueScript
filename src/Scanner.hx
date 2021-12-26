@@ -229,9 +229,9 @@ class Scanner {
 		}
 		var newStr = s;
 		while (newStr.indexOf("\\x") != -1) {
-			var hexString = s.substring(s.indexOf("\\x") + 2, s.indexOf("\\x") + 4);
+			var hexString = newStr.substring(newStr.indexOf("\\x") + 2, newStr.indexOf("\\x") + 4);
 			var intValue = Std.parseInt("0x" + hexString);
-			newStr = s.substring(0, s.indexOf("\\x")) + String.fromCharCode(intValue) + s.substring(s.indexOf("\\x") + 4);
+			newStr = newStr.substring(0, newStr.indexOf("\\x")) + String.fromCharCode(intValue) + newStr.substring(newStr.indexOf("\\x") + 4);
 		}
 
 		return newStr;
