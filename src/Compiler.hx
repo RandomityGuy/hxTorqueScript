@@ -7,7 +7,6 @@ import expr.Expr.Stmt;
 import haxe.ds.Vector;
 import haxe.io.BytesData;
 import haxe.io.BytesBuffer;
-import hl.Bytes;
 
 enum ConstTable {
 	StringTable;
@@ -19,12 +18,20 @@ enum ConstTableType {
 	Function;
 }
 
-typedef StringTableEntry = {
+@:publicFields
+class StringTableEntry {
 	var string:String;
 	var start:Int;
 	var len:Int;
 	var tag:Bool;
-};
+
+	public function new(s:String, start:Int, len:Int, tag:Bool) {
+		this.string = s;
+		this.start = start;
+		this.len = len;
+		this.tag = tag;
+	}
+}
 
 class StringTable {
 	var totalLen:Int;
@@ -54,12 +61,7 @@ class StringTable {
 			len = 7;
 		}
 
-		var addEntry:StringTableEntry = {
-			start: totalLen,
-			len: len,
-			string: str,
-			tag: tag
-		}
+		var addEntry:StringTableEntry = new StringTableEntry(str, totalLen, len, tag);
 
 		entries.push(addEntry);
 
@@ -91,12 +93,7 @@ class StringTable {
 		for (i in 0...totalLen) {
 			var c = bytesInput.readByte();
 			if (c == 0) {
-				var entry = {
-					start: curStrStart,
-					len: curStrLen + 1,
-					string: currentStr,
-					tag: false
-				}
+				var entry = new StringTableEntry(currentStr, curStrStart, curStrLen + 1, false);
 				curStrLen = 0;
 				currentStr = "";
 				curStrStart = i + 1;
@@ -275,7 +272,7 @@ class Compiler {
 			codeSize = Stmt.precompileBlock(this, statementList, 0) + 1;
 		}
 
-		var lineBreakPairCount = breakLineCount;
+		var lineBreakPairCount = breakLineCount * 2;
 		var context = new CompileContext(codeSize, lineBreakPairCount);
 		context.breakPoint = 0;
 		context.continuePoint = 0;
