@@ -205,7 +205,7 @@ class Compiler {
 		return currentStringTable.add(value, caseSens, tag);
 	}
 
-	public function stringToNumber(value:String):Float {
+	public static function stringToNumber(value:String):Float {
 		if (value == "true")
 			return 1;
 		if (value == "false")
@@ -240,7 +240,7 @@ class Compiler {
 		}
 	}
 
-	public function compile(code:String) {
+	public function compile(code:String, optimizationLevel:Int = 3) {
 		var statementList:Array<Stmt> = null;
 		// try {
 		var scanner = new Scanner(code);
@@ -251,6 +251,11 @@ class Compiler {
 		// 	trace(e.message);
 		// 	return null;
 		// }
+
+		var optimizer = new Optimizer(statementList);
+		optimizer.optimize();
+
+		statementList = optimizer.getAST();
 
 		var outData = new BytesBuffer();
 		outData.addInt32(dsoVersion);

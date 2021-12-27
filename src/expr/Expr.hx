@@ -41,6 +41,10 @@ class Stmt {
 		}
 	}
 
+	function visitStmt(optimizerPass:IOptimizerPass) {
+		optimizerPass.visitStmt(this);
+	}
+
 	function addBreakLine(ip:Int, compiler:Compiler, context:Compiler.CompileContext) {
 		if (compiler.inFunction) {
 			var line = compiler.breakLineCount * 2;
@@ -71,6 +75,12 @@ class Stmt {
 		recursion--;
 		return context.ip;
 	}
+
+	static function visitBlock(optimizerPass:IOptimizerPass, stmts:Array<Stmt>) {
+		for (s in stmts) {
+			s.visitStmt(optimizerPass);
+		}
+	}
 }
 
 @:publicFields
@@ -98,6 +108,10 @@ class BreakStmt extends Stmt {
 		}
 		return context.ip;
 	}
+
+	public override function visitStmt(optimizerPass:IOptimizerPass) {
+		optimizerPass.visitBreakStmt(this);
+	}
 }
 
 @:publicFields
@@ -124,6 +138,10 @@ class ContinueStmt extends Stmt {
 			context.codeStream[context.ip++] = context.continuePoint;
 		}
 		return context.ip;
+	}
+
+	public override function visitStmt(optimizerPass:IOptimizerPass) {
+		optimizerPass.visitContinueStmt(this);
 	}
 }
 
@@ -153,6 +171,10 @@ class Expr extends Stmt {
 
 	public function getPrefferredType() {
 		return ReqNone;
+	}
+
+	public override function visitStmt(optimizerPass:IOptimizerPass) {
+		optimizerPass.visitExpr(this);
 	}
 
 	public static function conversionOp(src:TypeReq, dest:TypeReq):OpCode {
@@ -222,6 +244,11 @@ class ParenthesisExpr extends Expr {
 	public override function getPrefferredType():TypeReq {
 		return expr.getPrefferredType();
 	}
+
+	public override function visitStmt(optimizerPass:IOptimizerPass) {
+		expr.visitStmt(optimizerPass);
+		return optimizerPass.visitParenthesisExpr(this);
+	}
 }
 
 @:publicFields
@@ -253,6 +280,12 @@ class ReturnStmt extends Stmt {
 			context.codeStream[context.ip++] = cast OpCode.Return;
 		}
 		return context.ip;
+	}
+
+	public override function visitStmt(optimizerPass:IOptimizerPass) {
+		if (expr != null)
+			this.expr.visitStmt(optimizerPass);
+		optimizerPass.visitReturnStmt(this);
 	}
 }
 
@@ -324,6 +357,14 @@ class IfStmt extends Stmt {
 			context.ip = Stmt.compileBlock(compiler, context, body);
 		}
 		return context.ip;
+	}
+
+	public override function visitStmt(optimizerPass:IOptimizerPass) {
+		condition.visitStmt(optimizerPass);
+		Stmt.visitBlock(optimizerPass, body);
+		if (elseBlock != null)
+			Stmt.visitBlock(optimizerPass, elseBlock);
+		optimizerPass.visitIfStmt(this);
 	}
 }
 
@@ -409,6 +450,16 @@ class LoopStmt extends Stmt {
 		context.codeStream[context.ip++] = start + loopBlockStartOffset;
 		return context.ip;
 	}
+
+	public override function visitStmt(optimizerPass:IOptimizerPass) {
+		condition.visitStmt(optimizerPass);
+		if (init != null)
+			init.visitStmt(optimizerPass);
+		Stmt.visitBlock(optimizerPass, body);
+		if (end != null)
+			end.visitStmt(optimizerPass);
+		optimizerPass.visitLoopStmt(this);
+	}
 }
 
 @:publicFields
@@ -416,6 +467,9 @@ class BinaryExpr extends Expr {
 	var left:Expr;
 	var right:Expr;
 	var op:Token;
+
+	var optimized:Bool = false;
+	var optimizedExpr:Expr;
 }
 
 @:publicFields
@@ -432,6 +486,8 @@ class FloatBinaryExpr extends BinaryExpr {
 		// <right>
 		// <operand>
 		// <convertOp>?
+		if (optimized)
+			return optimizedExpr.precompile(compiler, typeReq);
 		var addSize = left.precompile(compiler, ReqFloat) + right.precompile(compiler, ReqFloat) + 1;
 		if (typeReq != ReqFloat) {
 			addSize++;
@@ -441,6 +497,8 @@ class FloatBinaryExpr extends BinaryExpr {
 	}
 
 	public override function compile(compiler:Compiler, context:CompileContext, typeReq:TypeReq):Int {
+		if (optimized)
+			return optimizedExpr.compile(compiler, context, typeReq);
 		context.ip = right.compile(compiler, context, ReqFloat);
 		context.ip = left.compile(compiler, context, ReqFloat);
 		var operand = switch (op.type) {
@@ -466,6 +524,16 @@ class FloatBinaryExpr extends BinaryExpr {
 			context.codeStream[context.ip++] = cast Expr.conversionOp(ReqFloat, typeReq);
 
 		return context.ip;
+	}
+
+	public override function visitStmt(visitor:IOptimizerPass) {
+		if (optimized)
+			optimizedExpr.visitStmt(visitor);
+		else {
+			left.visitStmt(visitor);
+			right.visitStmt(visitor);
+			visitor.visitFloatBinaryExpr(this);
+		}
 	}
 
 	public override function getPrefferredType():TypeReq {
@@ -511,6 +579,8 @@ class IntBinaryExpr extends BinaryExpr {
 	}
 
 	public override function precompile(compiler:Compiler, typeReq:TypeReq):Int {
+		if (optimized)
+			return optimizedExpr.precompile(compiler, typeReq);
 		getSubTypeOperand();
 		// Verified to be correct
 
@@ -527,6 +597,8 @@ class IntBinaryExpr extends BinaryExpr {
 	}
 
 	public override function compile(compiler:Compiler, context:CompileContext, typeReq:TypeReq):Int {
+		if (optimized)
+			return optimizedExpr.compile(compiler, context, typeReq);
 		if (operand == OpCode.Or || operand == OpCode.And) {
 			context.ip = left.compile(compiler, context, subType);
 			context.codeStream[context.ip++] = operand == OpCode.Or ? cast OpCode.JmpIfNP : cast OpCode.JmpIfNotNP;
@@ -543,6 +615,16 @@ class IntBinaryExpr extends BinaryExpr {
 			context.codeStream[context.ip++] = cast Expr.conversionOp(ReqInt, typeReq);
 
 		return context.ip;
+	}
+
+	public override function visitStmt(visitor:IOptimizerPass) {
+		if (optimized)
+			optimizedExpr.visitStmt(visitor);
+		else {
+			left.visitStmt(visitor);
+			right.visitStmt(visitor);
+			visitor.visitIntBinaryExpr(this);
+		}
 	}
 
 	public override function getPrefferredType():TypeReq {
@@ -566,6 +648,8 @@ class StrEqExpr extends BinaryExpr {
 		// CompareStr
 		// Not?
 		// <conversionOp>
+		if (optimized)
+			return optimizedExpr.precompile(compiler, typeReq);
 		var size = left.precompile(compiler, ReqString) + right.precompile(compiler, ReqString) + 2;
 
 		if (op.type == TokenType.StringNotEquals)
@@ -578,6 +662,8 @@ class StrEqExpr extends BinaryExpr {
 	}
 
 	public override function compile(compiler:Compiler, context:CompileContext, typeReq:TypeReq):Int {
+		if (optimized)
+			return optimizedExpr.compile(compiler, context, typeReq);
 		context.ip = left.compile(compiler, context, ReqString);
 		context.codeStream[context.ip++] = cast OpCode.AdvanceStrNul;
 		context.ip = right.compile(compiler, context, ReqString);
@@ -590,6 +676,16 @@ class StrEqExpr extends BinaryExpr {
 			context.codeStream[context.ip++] = cast Expr.conversionOp(ReqInt, typeReq);
 
 		return context.ip;
+	}
+
+	public override function visitStmt(visitor:IOptimizerPass) {
+		if (optimized)
+			optimizedExpr.visitStmt(visitor);
+		else {
+			left.visitStmt(visitor);
+			right.visitStmt(visitor);
+			visitor.visitStrEqExpr(this);
+		}
 	}
 
 	public override function getPrefferredType():TypeReq {
@@ -613,6 +709,8 @@ class StrCatExpr extends BinaryExpr {
 		// <right>
 		// RewindStr
 		// (StrToUInt | StrToFlt)?
+		if (optimized)
+			return optimizedExpr.precompile(compiler, typeReq);
 		var addSize = left.precompile(compiler, ReqString) + right.precompile(compiler, ReqString) + 2;
 
 		if (op.type != TokenType.Concat)
@@ -625,6 +723,8 @@ class StrCatExpr extends BinaryExpr {
 	}
 
 	public override function compile(compiler:Compiler, context:CompileContext, typeReq:TypeReq):Int {
+		if (optimized)
+			return optimizedExpr.compile(compiler, context, typeReq);
 		context.ip = left.compile(compiler, context, ReqString);
 		if (op.type == TokenType.Concat)
 			context.codeStream[context.ip++] = cast OpCode.AdvanceStr;
@@ -655,6 +755,16 @@ class StrCatExpr extends BinaryExpr {
 				false;
 		}
 		return context.ip;
+	}
+
+	public override function visitStmt(visitor:IOptimizerPass) {
+		if (optimized)
+			optimizedExpr.visitStmt(visitor);
+		else {
+			left.visitStmt(visitor);
+			right.visitStmt(visitor);
+			visitor.visitStrCatExpr(this);
+		}
 	}
 
 	public override function getPrefferredType():TypeReq {
@@ -758,6 +868,13 @@ class ConditionalExpr extends Expr {
 	public override function getPrefferredType():TypeReq {
 		return trueExpr.getPrefferredType();
 	}
+
+	public override function visitStmt(visitor:IOptimizerPass) {
+		condition.visitStmt(visitor);
+		trueExpr.visitStmt(visitor);
+		falseExpr.visitStmt(visitor);
+		visitor.visitConditionalExpr(this);
+	}
 }
 
 @:publicFields
@@ -766,6 +883,9 @@ class IntUnaryExpr extends Expr {
 	var op:Token;
 
 	var integer:Bool;
+
+	var optimized:Bool = false;
+	var optimizedExpr:Expr;
 
 	public function new(expr:Expr, op:Token) {
 		super(expr.lineNo);
@@ -777,6 +897,8 @@ class IntUnaryExpr extends Expr {
 		// <expr>
 		// Not | NotF | OnesComplement
 		// <conversionOp>?
+		if (optimized)
+			return optimizedExpr.precompile(compiler, typeReq);
 		integer = true;
 		var prefType = expr.getPrefferredType();
 		if (this.op.type == TokenType.Not && prefType == ReqFloat || prefType == ReqString) {
@@ -792,6 +914,8 @@ class IntUnaryExpr extends Expr {
 	}
 
 	public override function compile(compiler:Compiler, context:CompileContext, typeReq:TypeReq):Int {
+		if (optimized)
+			return optimizedExpr.compile(compiler, context, typeReq);
 		context.ip = expr.compile(compiler, context, integer ? ReqInt : ReqFloat);
 		if (op.type == Not) {
 			context.codeStream[context.ip++] = integer ? cast OpCode.Not : cast OpCode.NotF;
@@ -805,12 +929,24 @@ class IntUnaryExpr extends Expr {
 	public override function getPrefferredType():TypeReq {
 		return ReqInt;
 	}
+
+	public override function visitStmt(visitor:IOptimizerPass) {
+		if (optimized)
+			optimizedExpr.visitStmt(visitor);
+		else {
+			expr.visitStmt(visitor);
+			visitor.visitIntUnaryExpr(this);
+		}
+	}
 }
 
 @:publicFields
 class FloatUnaryExpr extends Expr {
 	var expr:Expr;
 	var op:Token;
+
+	var optimized:Bool = false;
+	var optimizedExpr:Expr;
 
 	public function new(expr:Expr, op:Token) {
 		super(expr.lineNo);
@@ -822,6 +958,8 @@ class FloatUnaryExpr extends Expr {
 		// <expr>
 		// Neg
 		// <conversionOp>?
+		if (optimized)
+			return optimizedExpr.precompile(compiler, typeReq);
 		var exprSize = expr.precompile(compiler, TypeReq.ReqFloat);
 		if (typeReq != ReqFloat)
 			return exprSize + 2;
@@ -830,6 +968,8 @@ class FloatUnaryExpr extends Expr {
 	}
 
 	public override function compile(compiler:Compiler, context:CompileContext, typeReq:TypeReq):Int {
+		if (optimized)
+			return optimizedExpr.compile(compiler, context, typeReq);
 		context.ip = expr.compile(compiler, context, TypeReq.ReqFloat);
 		context.codeStream[context.ip++] = cast OpCode.Neg;
 		if (typeReq != ReqFloat)
@@ -840,6 +980,15 @@ class FloatUnaryExpr extends Expr {
 
 	public override function getPrefferredType():TypeReq {
 		return ReqFloat;
+	}
+
+	public override function visitStmt(visitor:IOptimizerPass) {
+		if (optimized)
+			optimizedExpr.visitStmt(visitor);
+		else {
+			expr.visitStmt(visitor);
+			visitor.visitFloatUnaryExpr(this);
+		}
 	}
 }
 
@@ -916,6 +1065,12 @@ class VarExpr extends Expr {
 	public override function getPrefferredType():TypeReq {
 		return ReqNone;
 	}
+
+	public override function visitStmt(visitor:IOptimizerPass) {
+		if (arrayIndex != null)
+			arrayIndex.visitStmt(visitor);
+		visitor.visitVarExpr(this);
+	}
 }
 
 @:publicFields
@@ -963,6 +1118,10 @@ class IntExpr extends Expr {
 
 	public override function getPrefferredType():TypeReq {
 		return ReqInt;
+	}
+
+	public override function visitStmt(visitor:IOptimizerPass) {
+		visitor.visitIntExpr(this);
 	}
 }
 
@@ -1012,6 +1171,10 @@ class FloatExpr extends Expr {
 	public override function getPrefferredType():TypeReq {
 		return ReqFloat;
 	}
+
+	public override function visitStmt(visitor:IOptimizerPass) {
+		visitor.visitFloatExpr(this);
+	}
 }
 
 @:publicFields
@@ -1037,7 +1200,7 @@ class StringConstExpr extends Expr {
 		} else if (typeReq == ReqNone)
 			return 0;
 
-		fVal = compiler.stringToNumber(value);
+		fVal = Compiler.stringToNumber(value);
 
 		if (typeReq == ReqFloat)
 			index = compiler.addFloat(fVal);
@@ -1068,6 +1231,10 @@ class StringConstExpr extends Expr {
 	public override function getPrefferredType():TypeReq {
 		return ReqString;
 	}
+
+	public override function visitStmt(visitor:IOptimizerPass) {
+		visitor.visitStringConstExpr(this);
+	}
 }
 
 @:publicFields
@@ -1091,7 +1258,7 @@ class ConstantExpr extends Expr {
 		} else if (typeReq == ReqNone)
 			return 0;
 
-		fVal = compiler.stringToNumber(name.literal);
+		fVal = Compiler.stringToNumber(name.literal);
 
 		if (typeReq == ReqFloat)
 			index = compiler.addFloat(fVal);
@@ -1122,6 +1289,10 @@ class ConstantExpr extends Expr {
 
 	public override function getPrefferredType():TypeReq {
 		return ReqString;
+	}
+
+	public override function visitStmt(visitor:IOptimizerPass) {
+		visitor.visitConstantExpr(this);
 	}
 }
 
@@ -1209,6 +1380,12 @@ class AssignExpr extends Expr {
 
 	public override function getPrefferredType():TypeReq {
 		return expr.getPrefferredType();
+	}
+
+	public override function visitStmt(visitor:IOptimizerPass) {
+		varExpr.visitStmt(visitor);
+		expr.visitStmt(visitor);
+		visitor.visitAssignExpr(this);
 	}
 }
 
@@ -1331,6 +1508,12 @@ class AssignOpExpr extends Expr {
 		this.getAssignOpTypeOp();
 		return subType;
 	}
+
+	public override function visitStmt(visitor:IOptimizerPass) {
+		varExpr.visitStmt(visitor);
+		expr.visitStmt(visitor);
+		visitor.visitAssignOpExpr(this);
+	}
 }
 
 enum abstract FuncCallType(Int) {
@@ -1393,6 +1576,13 @@ class FuncCallExpr extends Expr {
 
 	public override function getPrefferredType():TypeReq {
 		return ReqString;
+	}
+
+	public override function visitStmt(optimizerPass:IOptimizerPass) {
+		for (i in 0...args.length) {
+			args[i].visitStmt(optimizerPass);
+		}
+		optimizerPass.visitFuncCallExpr(this);
 	}
 }
 
@@ -1473,6 +1663,13 @@ class SlotAccessExpr extends Expr {
 	public override function getPrefferredType():TypeReq {
 		return ReqNone;
 	}
+
+	public override function visitStmt(optimizerPass:IOptimizerPass) {
+		objectExpr.visitStmt(optimizerPass);
+		if (arrayExpr != null)
+			arrayExpr.visitStmt(optimizerPass);
+		optimizerPass.visitSlotAccessExpr(this);
+	}
 }
 
 @:publicFields
@@ -1543,6 +1740,15 @@ class SlotAssignExpr extends Expr {
 
 	public override function getPrefferredType():TypeReq {
 		return ReqString;
+	}
+
+	public override function visitStmt(optimizerPass:IOptimizerPass) {
+		if (objectExpr != null)
+			objectExpr.visitStmt(optimizerPass);
+		if (arrayExpr != null)
+			arrayExpr.visitStmt(optimizerPass);
+		expr.visitStmt(optimizerPass);
+		optimizerPass.visitSlotAssignExpr(this);
 	}
 }
 
@@ -1665,6 +1871,15 @@ class SlotAssignOpExpr extends Expr {
 		getAssignOpTypeOp();
 		return subType;
 	}
+
+	public override function visitStmt(optimizerPass:IOptimizerPass) {
+		if (objectExpr != null)
+			objectExpr.visitStmt(optimizerPass);
+		if (arrayExpr != null)
+			arrayExpr.visitStmt(optimizerPass);
+		expr.visitStmt(optimizerPass);
+		optimizerPass.visitSlotAssignOpExpr(this);
+	}
 }
 
 @:publicFields
@@ -1763,6 +1978,21 @@ class ObjectDeclExpr extends Expr {
 	public override function getPrefferredType():TypeReq {
 		return ReqInt;
 	}
+
+	public override function visitStmt(optimizerPass:IOptimizerPass) {
+		className.visitStmt(optimizerPass);
+		objectNameExpr.visitStmt(optimizerPass);
+		for (arg in args)
+			arg.visitStmt(optimizerPass);
+
+		for (slot in slotDecls)
+			slot.visitStmt(optimizerPass);
+
+		for (subObj in subObjects)
+			subObj.visitStmt(optimizerPass);
+
+		optimizerPass.visitObjectDeclExpr(this);
+	}
 }
 
 @:publicFields
@@ -1834,5 +2064,14 @@ class FunctionDeclStmt extends Stmt {
 		compiler.inFunction = false;
 		context.codeStream[context.ip++] = cast OpCode.Return;
 		return context.ip;
+	}
+
+	public override function visitStmt(optimizerPass:IOptimizerPass) {
+		for (arg in args)
+			arg.visitStmt(optimizerPass);
+		for (stmt in stmts)
+			stmt.visitStmt(optimizerPass);
+
+		optimizerPass.visitFunctionDeclStmt(this);
 	}
 }
