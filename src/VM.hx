@@ -343,7 +343,7 @@ class ExprEvalState {
 		else if (stackVars.length > 0)
 			thisVariable = stackVars[stackVars.length - 1].get(name);
 		if (thisVariable == null)
-			trace("Warning: Undefined variable '" + name + "'");
+			Sys.println("Warning: Undefined variable '" + name + "'");
 	}
 
 	public function setCurVarNameCreate(name:String) {
@@ -363,7 +363,7 @@ class ExprEvalState {
 			}
 		} else {
 			thisVariable = null;
-			trace("Warning: Accessing local variable '" + name + "' in global scope!");
+			Sys.println("Warning: Accessing local variable '" + name + "' in global scope!");
 		}
 	}
 

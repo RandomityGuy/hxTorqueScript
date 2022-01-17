@@ -8,7 +8,7 @@ import sys.FileSystem;
 class ConsoleFunctions {
 	@:consoleFunction(usage = "echo(value, ...)", minArgs = 2, maxArgs = 0)
 	static function echo(vm:VM, thisObj:SimObject, args:Array<String>):Void {
-		trace(args.slice(1).join(""));
+		Sys.println(args.slice(1).join(""));
 	}
 
 	@:consoleFunction(usage = "activatePackage(package)", minArgs = 2, maxArgs = 2)
@@ -25,11 +25,11 @@ class ConsoleFunctions {
 	static function compile(vm:VM, thisObj:SimObject, args:Array<String>):Bool {
 		var f = args[1];
 		if (!FileSystem.exists(f)) {
-			trace('exec: invalid script file ${f}');
+			Sys.println('exec: invalid script file ${f}');
 			return false;
 		}
 		var compiler = new Compiler();
-		trace('Compiling ${f}...');
+		Sys.println('Compiling ${f}...');
 		var dso = compiler.compile(File.getContent(f));
 		File.saveBytes(f + '.dso', dso.getBytes());
 		return true;
@@ -39,18 +39,18 @@ class ConsoleFunctions {
 	static function exec(vm:VM, thisObj:SimObject, args:Array<String>):Bool {
 		var f = args[1];
 		if (!FileSystem.exists(f) && !FileSystem.exists(f + '.dso')) {
-			trace('exec: invalid script file ${f}');
+			Sys.println('exec: invalid script file ${f}');
 			return false;
 		}
 		if (FileSystem.exists(f)) {
 			var compiler = new Compiler();
-			trace('Compiling ${f}...');
+			Sys.println('Compiling ${f}...');
 			var dso = compiler.compile(File.getContent(f));
 			File.saveBytes(f + '.dso', dso.getBytes());
 		}
 
 		if (FileSystem.exists(f + '.dso')) {
-			trace('Loading compiled script ${f}.');
+			Sys.println('Loading compiled script ${f}.');
 			vm.exec(f);
 		}
 
@@ -66,7 +66,7 @@ class ConsoleFunctions {
 			code.load(new BytesInput(bytes.getBytes()));
 			return code.exec(0, null, null, [], false, null);
 		} catch (e) {
-			trace(e.details);
+			Sys.println(e.details);
 			return "";
 		}
 	}

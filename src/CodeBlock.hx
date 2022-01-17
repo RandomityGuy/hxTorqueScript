@@ -199,7 +199,7 @@ class CodeBlock {
 						var db:SimObject = vm.dataBlocks.get(callArgs[2]);
 						if (db != null) {
 							if (db.getClassName().toLowerCase() == callArgs[1].toLowerCase()) {
-								trace('Cannot re-declare data block ${callArgs[1]} with a different class.');
+								Sys.println('Cannot re-declare data block ${callArgs[1]} with a different class.');
 								ip = failJump;
 								continue;
 							}
@@ -207,19 +207,24 @@ class CodeBlock {
 						}
 					}
 					if (currentNewObject == null) {
-						if (!ConsoleObjectConstructors.constructorMap.exists(callArgs[1])) {
-							trace('Unable to instantantiate non con-object class ${callArgs[1]}');
-							ip = failJump;
-							continue;
+						if (!datablock) {
+							if (!ConsoleObjectConstructors.constructorMap.exists(callArgs[1])) {
+								Sys.println('Unable to instantantiate non con-object class ${callArgs[1]}');
+								ip = failJump;
+								continue;
+							}
+							currentNewObject = cast ConsoleObjectConstructors.constructorMap.get(callArgs[1])();
+						} else {
+							currentNewObject = new SimDataBlock();
+							currentNewObject.className = callArgs[1];
 						}
-						currentNewObject = cast ConsoleObjectConstructors.constructorMap.get(callArgs[1])();
 						currentNewObject.assignId(datablock ? vm.nextDatablockId++ : vm.nextSimId++);
 						if (objParent != null) {
 							var parent = vm.simObjects.get(objParent);
 							if (parent != null) {
 								currentNewObject.assignFieldsFrom(parent);
 							} else {
-								trace('Parent object ${objParent} for ${callArgs[1]} does not exist.');
+								Sys.println('Parent object ${objParent} for ${callArgs[1]} does not exist.');
 							}
 						}
 						if (callArgs.length > 2) {
@@ -253,7 +258,7 @@ class CodeBlock {
 					var datablock:SimDataBlock = Std.isOfType(currentNewObject, SimDataBlock) ? cast currentNewObject : null;
 					if (datablock != null) {
 						if (!datablock.preload()) {
-							trace('Datablock ${datablock.getName()} failed to preload.');
+							Sys.println('Datablock ${datablock.getName()} failed to preload.');
 							ip = failJump;
 							vm.idMap.remove(currentNewObject.id);
 							if (added)
@@ -552,7 +557,7 @@ class CodeBlock {
 					var nsEntry = vm.findFunction(fnNamespace, fnName);
 					if (nsEntry == null) {
 						ip += 3;
-						trace('Unable to find function ${fnNamespace}::${fnName}');
+						Sys.println('Unable to find function ${fnNamespace}::${fnName}');
 						vm.STR.getArgs(fnName);
 						continue;
 					}
@@ -578,7 +583,7 @@ class CodeBlock {
 						if (vm.evalState.thisObject == null)
 							vm.evalState.thisObject = vm.idMap.get(Std.parseInt(callArgs[1]));
 						if (vm.evalState.thisObject == null) {
-							trace('Unable to find object ${callArgs[1]} attempting to call function ${fnName}');
+							Sys.println('Unable to find object ${callArgs[1]} attempting to call function ${fnName}');
 							continue;
 						}
 						nsEntry = vm.findFunction(vm.evalState.thisObject.getClassName(), fnName);
@@ -598,7 +603,7 @@ class CodeBlock {
 					}
 					if (nsEntry == null || noCalls) {
 						if (!noCalls) {
-							trace('Unable to find function ${fnName}');
+							Sys.println('Unable to find function ${fnName}');
 						}
 						vm.STR.setStringValue("");
 					}
@@ -610,7 +615,7 @@ class CodeBlock {
 						case x:
 							if ((nsEntry.minArgs > 0 && callArgs.length < nsEntry.minArgs)
 								|| (nsEntry.maxArgs > 0 && callArgs.length > nsEntry.maxArgs)) {
-								trace('Invalid argument count for function ${fnName}');
+								Sys.println('Invalid argument count for function ${fnName}');
 							} else {
 								switch (x) {
 									case StringCallbackType(callback):
@@ -644,7 +649,7 @@ class CodeBlock {
 									case VoidCallbackType(callback):
 										callback(vm, vm.evalState.thisObject, callArgs);
 										if (codeStream[ip] != cast OpCode.StrToNone) {
-											trace('Call to ${fnName} uses result of void function call');
+											Sys.println('Call to ${fnName} uses result of void function call');
 										}
 										vm.STR.setStringValue("");
 

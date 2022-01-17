@@ -24,62 +24,81 @@ class Main {
 
 		if (args.length == 0) {
 			Sys.println("Usage: ");
-			Sys.println("hxTorqueScript <path/directory> [-d] [-v[atr]]");
+			Sys.println("hxTorqueScript <path/directory> [-d] [-v[atr]] [-r] [-On] [REPL]");
 			Sys.println("-d: disassemble");
 			Sys.println("-v: a: args t: const tables r: const table references");
 			Sys.println("-r: run dso");
+			Sys.println("-On: optimization level where n is a number. 0 disables all optimization.");
+			Sys.println("REPL: Starts a REPL, do not input path/directory, use this as the first argument.");
 		} else {
 			var path = args[0];
 
-			var isRun = false;
-
-			var isDisassemble = false;
-			if (args.length > 1) {
-				if (args[1] == "-d") {
-					isDisassemble = true;
+			if (path == "REPL") {
+				var vm = new VM();
+				while (true) {
+					Sys.print("% ");
+					var line = Sys.stdin().readLine();
+					try {
+						var compiler = new Compiler();
+						var bytes = compiler.compile(line);
+						var code = new CodeBlock(vm, null);
+						code.load(new BytesInput(bytes.getBytes()));
+						Sys.println(code.exec(0, null, null, [], false, null));
+					} catch (e) {
+						Sys.println("Syntax error");
+					}
 				}
+			} else {
+				var isRun = false;
 
-				if (args[1] == "-r") {
-					isRun = true;
-				}
+				var isDisassemble = false;
+				if (args.length > 1) {
+					if (args[1] == "-d") {
+						isDisassemble = true;
+					}
 
-				if (args[1].substring(0, 2) == '-O') {
-					oLevel = Std.parseInt(args[1].substring(2));
-				}
+					if (args[1] == "-r") {
+						isRun = true;
+					}
 
-				if (args.length > 2) {
-					if (args[2].substring(0, 2) == "-v") {
-						var chrs = args[2].substring(2);
-						disasmVerbosity = new EnumFlags<Disassembler.DisassemblyVerbosity>();
-						disasmVerbosity.set(Disassembler.DisassemblyVerbosity.Code);
+					if (args[1].substring(0, 2) == '-O') {
+						oLevel = Std.parseInt(args[1].substring(2));
+					}
 
-						for (i in 0...chrs.length) {
-							if (chrs.charAt(i) == "a") {
-								disasmVerbosity.set(Disassembler.DisassemblyVerbosity.Args);
-							}
-							if (chrs.charAt(i) == "t") {
-								disasmVerbosity.set(Disassembler.DisassemblyVerbosity.ConstTables);
-							}
-							if (chrs.charAt(i) == "r") {
-								disasmVerbosity.set(Disassembler.DisassemblyVerbosity.ConstTableReferences);
+					if (args.length > 2) {
+						if (args[2].substring(0, 2) == "-v") {
+							var chrs = args[2].substring(2);
+							disasmVerbosity = new EnumFlags<Disassembler.DisassemblyVerbosity>();
+							disasmVerbosity.set(Disassembler.DisassemblyVerbosity.Code);
+
+							for (i in 0...chrs.length) {
+								if (chrs.charAt(i) == "a") {
+									disasmVerbosity.set(Disassembler.DisassemblyVerbosity.Args);
+								}
+								if (chrs.charAt(i) == "t") {
+									disasmVerbosity.set(Disassembler.DisassemblyVerbosity.ConstTables);
+								}
+								if (chrs.charAt(i) == "r") {
+									disasmVerbosity.set(Disassembler.DisassemblyVerbosity.ConstTableReferences);
+								}
 							}
 						}
 					}
 				}
-			}
 
-			if (FileSystem.isDirectory(path)) {
-				if (isDisassemble)
-					disasmDirectory(path);
-				else if (!isRun)
-					execDirectory(path, oLevel);
-			} else {
-				if (isDisassemble)
-					disasmFile(path);
-				else if (!isRun)
-					execFile(path);
-				else
-					runFile(path);
+				if (FileSystem.isDirectory(path)) {
+					if (isDisassemble)
+						disasmDirectory(path);
+					else if (!isRun)
+						execDirectory(path, oLevel);
+				} else {
+					if (isDisassemble)
+						disasmFile(path);
+					else if (!isRun)
+						execFile(path);
+					else
+						runFile(path);
+				}
 			}
 		}
 
