@@ -38,6 +38,8 @@ class StringTable {
 
 	public var entries:Array<StringTableEntry> = [];
 
+	public var indexToEntryMap:Map<Int, String> = [];
+
 	public function new() {}
 
 	public function add(str:String, caseSens:Bool, tag:Bool) {
@@ -66,6 +68,8 @@ class StringTable {
 		entries.push(addEntry);
 
 		totalLen += len;
+
+		indexToEntryMap.set(addEntry.start, str);
 
 		return addEntry.start;
 	}
@@ -109,6 +113,8 @@ class StringTable {
 class IdentTable {
 	public var identMap:Map<Int, Array<Int>> = [];
 
+	public var ipToIdentMap:Map<Int, String> = [];
+
 	public function new() {}
 
 	public function add(compiler:Compiler, ste:String, ip:Int) {
@@ -119,6 +125,7 @@ class IdentTable {
 		} else {
 			identMap.set(index, [ip]);
 		}
+		ipToIdentMap.set(ip, ste);
 	}
 
 	public function write(bytesData:BytesBuffer) {

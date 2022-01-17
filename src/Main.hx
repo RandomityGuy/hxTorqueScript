@@ -141,8 +141,7 @@ class Main {
 		var f = File.getBytes(path);
 		// try {
 		var vm = new VM();
-		vm.load(new BytesInput(f));
-		vm.exec(0, null, null, [], false, "");
+		vm.exec(path);
 		// } catch (e) {
 		// 	trace('Failed compiling ${path}');
 		// 	trace(e.toString());

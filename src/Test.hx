@@ -235,13 +235,11 @@ class Test extends SingleSuite {
 				var vm:VM;
 
 				beforeAll({
-					var f = File.getBytes("tests/memoryReference.cs.dso");
 					vm = new VM();
-					vm.load(new BytesInput(f));
 					var pivar = new VM.Variable("$pi", vm);
 					pivar.setFloatValue(3.14);
 					vm.evalState.globalVars.set("$pi", pivar);
-					vm.exec(0, null, null, [], false, "");
+					vm.exec("tests/memoryReference.cs.dso");
 				});
 
 				it("$result", {
@@ -534,8 +532,7 @@ class Test extends SingleSuite {
 	function parseAndRunVM(path:String) {
 		var f = File.getBytes(path);
 		var vm = new VM();
-		vm.load(new BytesInput(f));
-		vm.exec(0, null, null, [], false, "");
+		vm.exec(path);
 		return vm;
 	}
 
