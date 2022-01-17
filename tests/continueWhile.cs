@@ -1,14 +1,14 @@
 $result::continue = 0;
 
-%i = 0;
-while (%i < 10)
+$i = 0;
+while ($i < 10)
 {
-    if (%i >= 5)
+    if ($i >= 5)
     {
-        %i++;
+        $i++;
         continue;
     }
-    $result::continue = $result::continue + %i;
+    $result::continue = $result::continue + $i;
 
-    %i++;
+    $i++;
 }

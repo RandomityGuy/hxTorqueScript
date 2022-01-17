@@ -1,5 +1,5 @@
 -cp src
 --macro include("console")
---hl bin/main.hl
-
---main Main
+-lib buddy
+--main Test
+-x Test

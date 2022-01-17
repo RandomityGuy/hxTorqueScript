@@ -49,7 +49,7 @@ class Stmt {
 		if (compiler.inFunction) {
 			var line = compiler.breakLineCount * 2;
 			compiler.breakLineCount++;
-			if (context.lineBreakPairSize != 0) {
+			if (context.lineBreakPairs.length != 0) {
 				context.lineBreakPairs[line] = lineNo;
 				context.lineBreakPairs[line + 1] = ip;
 			}
@@ -1909,7 +1909,7 @@ class ObjectDeclExpr extends Expr {
 
 	public function precompileSubObject(compiler:Compiler, typeReq:TypeReq):Int {
 		var argSize = 0;
-		compiler.precompileIdent(parentObject == null ? "" : parentObject.literal);
+		compiler.precompileIdent(parentObject == null ? null : parentObject.literal);
 		for (expr in args) {
 			argSize += expr.precompile(compiler, ReqString) + 1;
 		}
@@ -1944,18 +1944,18 @@ class ObjectDeclExpr extends Expr {
 		}
 		context.codeStream[context.ip++] = cast OpCode.CreateObject;
 
-		context.codeStream[context.ip] = compiler.compileIdent(parentObject != null ? parentObject.literal : "", context.ip);
+		context.codeStream[context.ip] = compiler.compileIdent(parentObject != null ? parentObject.literal : null, context.ip);
 		context.ip++;
-		context.codeStream[context.ip++] = cast structDecl;
+		context.codeStream[context.ip++] = structDecl ? 1 : 0;
 		context.codeStream[context.ip++] = start + failOffset;
 		for (slot in slotDecls)
 			context.ip = slot.compile(compiler, context, ReqNone);
 		context.codeStream[context.ip++] = cast OpCode.AddObject;
-		context.codeStream[context.ip++] = cast root;
+		context.codeStream[context.ip++] = root ? 1 : 0;
 		for (subObj in subObjects)
 			context.ip = subObj.compileSubObject(compiler, context, ReqNone, false);
 		context.codeStream[context.ip++] = cast OpCode.EndObject;
-		context.codeStream[context.ip++] = cast root || structDecl;
+		context.codeStream[context.ip++] = (root || structDecl) ? 1 : 0;
 		return context.ip;
 	}
 
@@ -2045,7 +2045,7 @@ class FunctionDeclStmt extends Stmt {
 		context.ip++;
 		context.codeStream[context.ip] = compiler.compileIdent(packageName != null ? packageName.literal : null, context.ip);
 		context.ip++;
-		context.codeStream[context.ip++] = cast stmts.length != 0;
+		context.codeStream[context.ip++] = stmts.length != 0 ? 1 : 0;
 		context.codeStream[context.ip++] = start + endOffset;
 		context.codeStream[context.ip++] = argc;
 		for (arg in args) {

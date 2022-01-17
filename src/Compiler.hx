@@ -34,7 +34,7 @@ class StringTableEntry {
 }
 
 class StringTable {
-	var totalLen:Int;
+	var totalLen:Int = 0;
 
 	public var entries:Array<StringTableEntry> = [];
 
@@ -253,7 +253,7 @@ class Compiler {
 		// }
 
 		var optimizer = new Optimizer(statementList);
-		optimizer.optimize();
+		// optimizer.optimize();
 
 		statementList = optimizer.getAST();
 
@@ -306,7 +306,7 @@ class Compiler {
 		context.codeStream[lastIp++] = cast OpCode.Return;
 		var totSize = codeSize + breakLineCount * 2;
 		outData.addInt32(codeSize);
-		outData.addInt32(lineBreakPairCount);
+		outData.addInt32(breakLineCount);
 
 		for (i in 0...codeSize) {
 			if (context.codeStream[i] < 0xFF)

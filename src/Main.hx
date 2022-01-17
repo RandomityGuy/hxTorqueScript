@@ -26,13 +26,20 @@ class Main {
 			Sys.println("hxTorqueScript <path/directory> [-d] [-v[atr]]");
 			Sys.println("-d: disassemble");
 			Sys.println("-v: a: args t: const tables r: const table references");
+			Sys.println("-r: run dso");
 		} else {
 			var path = args[0];
+
+			var isRun = false;
 
 			var isDisassemble = false;
 			if (args.length > 1) {
 				if (args[1] == "-d") {
 					isDisassemble = true;
+				}
+
+				if (args[1] == "-r") {
+					isRun = true;
 				}
 
 				if (args.length > 2) {
@@ -59,13 +66,15 @@ class Main {
 			if (FileSystem.isDirectory(path)) {
 				if (isDisassemble)
 					disasmDirectory(path);
-				else
+				else if (!isRun)
 					execDirectory(path);
 			} else {
 				if (isDisassemble)
 					disasmFile(path);
-				else
+				else if (!isRun)
 					execFile(path);
+				else
+					runFile(path);
 			}
 		}
 
@@ -116,6 +125,19 @@ class Main {
 		var bytesB = compiler.compile(f);
 		File.saveBytes(path + '.dso', bytesB.getBytes());
 		successFiles++;
+		// } catch (e) {
+		// 	trace('Failed compiling ${path}');
+		// 	trace(e.toString());
+		// 	failedFiles++;
+		// }
+	}
+
+	static public function runFile(path:String) {
+		var f = File.getBytes(path);
+		// try {
+		var vm = new VM();
+		vm.load(new BytesInput(f));
+		vm.exec(0, null, null, [], false, "");
 		// } catch (e) {
 		// 	trace('Failed compiling ${path}');
 		// 	trace(e.toString());

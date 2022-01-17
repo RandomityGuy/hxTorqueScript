@@ -15,6 +15,7 @@ enum LineType {
 	GlobalFloatTable;
 	FunctionStringTable;
 	FunctionFloatTable;
+	IdentTable;
 	Code;
 }
 
@@ -57,15 +58,17 @@ typedef DisassmblyLine = {
 class Disassembler {
 	var globalFloatTable:Array<Float> = [];
 	var functionFloatTable:Array<Float> = [];
-	var currentFloatTable:Array<Float>;
-	var globalStringTable:Compiler.StringTable = new Compiler.StringTable();
-	var functionStringTable:Compiler.StringTable = new Compiler.StringTable();
+	var globalStringTable:String;
+	var functionStringTable:String;
 	var identTable:Compiler.IdentTable = new Compiler.IdentTable();
 	var dsoVersion = 33;
 	var codeStream:Array<Int> = [];
 	var lineBreakPairs:Array<Int> = [];
 
 	var inFunction:Bool = false;
+
+	var identMap:Map<Int, String> = [0 => null];
+	var identMapSize = 1;
 
 	var opCodeLookup:Map<Int, String> = [];
 
@@ -91,12 +94,20 @@ class Disassembler {
 		if (dsoVersion != 33)
 			throw new Exception("Incorrect DSO version: " + dsoVersion);
 
-		globalStringTable.read(inData);
+		var stSize = inData.readInt32();
+		globalStringTable = "";
+		for (i in 0...stSize) {
+			globalStringTable += String.fromCharCode(inData.readByte());
+		}
 		var size = inData.readInt32();
 		for (i in 0...size)
 			globalFloatTable.push(inData.readDouble());
 
-		functionStringTable.read(inData);
+		var stSize = inData.readInt32();
+		functionStringTable = "";
+		for (i in 0...stSize) {
+			functionStringTable += String.fromCharCode(inData.readByte());
+		}
 		size = inData.readInt32();
 		for (i in 0...size)
 			functionFloatTable.push(inData.readDouble());
@@ -119,41 +130,52 @@ class Disassembler {
 		identTable.read(inData);
 
 		for (ident => offsets in identTable.identMap) {
-			var whatIdent = null;
-			var idx = 0;
-			for (entry in globalStringTable.entries) {
-				if (entry.start == ident) {
-					whatIdent = entry;
-					idx = globalStringTable.entries.indexOf(entry);
-					break;
-				}
-			}
-
+			var identStr = getStringTableValue(globalStringTable, ident);
+			var identId = identMapSize;
 			for (offset in offsets) {
-				codeStream[offset] = idx;
+				codeStream[offset] = identMapSize;
 			}
+			identMap.set(identId, identStr);
+			identMapSize++;
 		}
 	}
 
+	function getStringTableValue(table:String, offset:Int) {
+		return table.substr(offset, table.indexOf("\x00", offset) - offset);
+	}
+
+	function getStringTableValueFromRef(table:String, ref:Int) {
+		var zeroCount = 0;
+		var str = "";
+		for (i in 0...table.length) {
+			if (table.charCodeAt(i) == 0) {
+				if (zeroCount == ref)
+					return str;
+				str = "";
+				zeroCount++;
+			} else {
+				str += table.charAt(i);
+			}
+		}
+		return "";
+	}
+
 	function normalizeSTE(steType:LineType, index:Int) {
+		var zeroCount = 0;
 		if (steType == GlobalStringTable) {
-			for (e in globalStringTable.entries) {
-				if (e.start == index)
-					return globalStringTable.entries.indexOf(e);
+			for (i in 0...globalStringTable.length) {
+				if (globalStringTable.charCodeAt(i) == 0)
+					zeroCount++;
+				if (i == index)
+					return zeroCount;
 			}
 		}
 		if (steType == FunctionStringTable) {
-			for (e in functionStringTable.entries) {
-				if (e.start == index)
-					return functionStringTable.entries.indexOf(e);
-			}
-
-			for (i in 0...functionStringTable.entries.length) {
-				var e = functionStringTable.entries[i];
-				if (e.start < index
-					&& (i == functionStringTable.entries.length - 1) ? true : functionStringTable.entries[i + 1].start > index) {
-					return i;
-				}
+			for (i in 0...functionStringTable.length) {
+				if (functionStringTable.charCodeAt(i) == 0)
+					zeroCount++;
+				if (i == index)
+					return zeroCount;
 			}
 		}
 
@@ -178,16 +200,16 @@ class Disassembler {
 
 			switch (instruction) {
 				case FuncDecl:
-					var fnName = new DisassemblyReference(LineType.GlobalStringTable, codeStream[ip]);
-					var fnNamespace = new DisassemblyReference(LineType.GlobalStringTable, codeStream[ip + 1]);
-					var fnPackage = new DisassemblyReference(LineType.GlobalStringTable, codeStream[ip + 2]);
+					var fnName = new DisassemblyReference(LineType.IdentTable, codeStream[ip]);
+					var fnNamespace = new DisassemblyReference(LineType.IdentTable, codeStream[ip + 1]);
+					var fnPackage = new DisassemblyReference(LineType.IdentTable, codeStream[ip + 2]);
 					var hasBody = new DisassemblyConst(codeStream[ip + 3]);
 					var fnEndOffset = new DisassemblyReference(LineType.Code, codeStream[ip + 4]);
 					endFuncIp = codeStream[ip + 4];
 					var fnArgc = new DisassemblyConst(codeStream[ip + 5]);
 					var fnArgs:Array<DissassemblyData> = [];
 					for (i in 0...fnArgc.value) {
-						fnArgs.push(new DisassemblyReference(LineType.GlobalStringTable, codeStream[ip + 6 + i]));
+						fnArgs.push(new DisassemblyReference(LineType.IdentTable, codeStream[ip + 6 + i]));
 					}
 					this.inFunction = true;
 					var line:DisassmblyLine = {
@@ -200,7 +222,7 @@ class Disassembler {
 					lines.push(line);
 
 				case CreateObject:
-					var objParent = new DisassemblyReference(LineType.GlobalStringTable, codeStream[ip]);
+					var objParent = new DisassemblyReference(LineType.IdentTable, codeStream[ip]);
 					var datablock = new DisassemblyConst(codeStream[ip + 1]);
 					var failJump = new DisassemblyReference(LineType.Code, codeStream[ip + 2]);
 					var line:DisassmblyLine = {
@@ -263,7 +285,7 @@ class Disassembler {
 					lines.push(line);
 
 				case SetCurVar | SetCurVarCreate:
-					var varIdx = new DisassemblyReference(LineType.GlobalStringTable, codeStream[ip]);
+					var varIdx = new DisassemblyReference(LineType.IdentTable, codeStream[ip]);
 					var line:DisassmblyLine = {
 						type: Code,
 						opCode: instruction,
@@ -292,7 +314,7 @@ class Disassembler {
 					lines.push(line);
 
 				case SetCurField:
-					var fieldIdx = new DisassemblyReference(LineType.GlobalStringTable, codeStream[ip]);
+					var fieldIdx = new DisassemblyReference(LineType.IdentTable, codeStream[ip]);
 					var line:DisassmblyLine = {
 						type: Code,
 						opCode: instruction,
@@ -364,7 +386,7 @@ class Disassembler {
 					lines.push(line);
 
 				case LoadImmedIdent:
-					var ref = new DisassemblyReference(LineType.GlobalStringTable, codeStream[ip]);
+					var ref = new DisassemblyReference(LineType.IdentTable, codeStream[ip]);
 					var line:DisassmblyLine = {
 						type: Code,
 						opCode: instruction,
@@ -375,8 +397,8 @@ class Disassembler {
 					lines.push(line);
 
 				case CallFunc | CallFuncResolve:
-					var fnName = new DisassemblyReference(LineType.GlobalStringTable, codeStream[ip]);
-					var fnNamespace = new DisassemblyReference(LineType.GlobalStringTable, codeStream[ip + 1]);
+					var fnName = new DisassemblyReference(LineType.IdentTable, codeStream[ip]);
+					var fnNamespace = new DisassemblyReference(LineType.IdentTable, codeStream[ip + 1]);
 					var callType = new DisassemblyConst(codeStream[ip + 2]);
 					var line:DisassmblyLine = {
 						type: Code,
@@ -420,13 +442,21 @@ class Disassembler {
 
 		var totalDism:Array<DisassmblyLine> = [];
 
-		for (i in 0...globalStringTable.entries.length) {
-			totalDism.push({
-				type: LineType.GlobalStringTable,
-				lineNo: i,
-				opCode: cast 0,
-				args: [new DisassemblyConst(globalStringTable.entries[i].string)]
-			});
+		var zeroCount = 0;
+		var str = "";
+		for (i in 0...globalStringTable.length) {
+			if (globalStringTable.charCodeAt(i) == 0) {
+				totalDism.push({
+					type: LineType.GlobalStringTable,
+					lineNo: zeroCount,
+					opCode: cast 0,
+					args: [new DisassemblyConst(str)]
+				});
+				str = "";
+				zeroCount++;
+			} else {
+				str += globalStringTable.charAt(i);
+			}
 		}
 
 		for (i in 0...globalFloatTable.length) {
@@ -438,13 +468,21 @@ class Disassembler {
 			});
 		}
 
-		for (i in 0...functionStringTable.entries.length) {
-			totalDism.push({
-				type: LineType.FunctionStringTable,
-				lineNo: i,
-				opCode: cast 0,
-				args: [new DisassemblyConst(functionStringTable.entries[i].string)]
-			});
+		var zeroCount = 0;
+		var str = "";
+		for (i in 0...functionStringTable.length) {
+			if (functionStringTable.charCodeAt(i) == 0) {
+				totalDism.push({
+					type: LineType.FunctionStringTable,
+					lineNo: zeroCount,
+					opCode: cast 0,
+					args: [new DisassemblyConst(str)]
+				});
+				str = "";
+				zeroCount++;
+			} else {
+				str += functionStringTable.charAt(i);
+			}
 		}
 
 		for (i in 0...functionFloatTable.length) {
@@ -453,6 +491,15 @@ class Disassembler {
 				lineNo: i,
 				opCode: cast 0,
 				args: [new DisassemblyConst(functionFloatTable[i])]
+			});
+		}
+
+		for (identIdx => ident in identMap) {
+			totalDism.push({
+				type: LineType.IdentTable,
+				lineNo: identIdx,
+				opCode: cast 0,
+				args: [new DisassemblyConst(ident)]
 			});
 		}
 
@@ -486,6 +533,11 @@ class Disassembler {
 					if (outputVerbosity.has(DisassemblyVerbosity.ConstTables))
 						output.add("FunctionFloatTable::" + StringTools.lpad('${line.lineNo}', "0", 5) + ": " + strData.value + "\n");
 
+				case IdentTable:
+					var strData:DisassemblyConst<String> = cast line.args[0];
+					if (outputVerbosity.has(DisassemblyVerbosity.ConstTables))
+						output.add("IdentTable::" + StringTools.lpad('${line.lineNo}', "0", 5) + ": " + strData.value + "\n");
+
 				case Code:
 					var args = "";
 
@@ -497,12 +549,12 @@ class Disassembler {
 									case GlobalStringTable:
 										"GlobalStringTable::" + StringTools.lpad('${ref.referenceIndex}', "0",
 											5) +
-										(outputVerbosity.has(DisassemblyVerbosity.ConstTableReferences) ? '<-\"${this.globalStringTable.entries[ref.referenceIndex].string}"' : "");
+										(outputVerbosity.has(DisassemblyVerbosity.ConstTableReferences) ? '<-\"${this.getStringTableValueFromRef(this.globalStringTable, ref.referenceIndex)}"' : "");
 
 									case FunctionStringTable:
 										"FunctionStringTable::" + StringTools.lpad('${ref.referenceIndex}', "0",
 											5) +
-										(outputVerbosity.has(DisassemblyVerbosity.ConstTableReferences) ? '<-\"${this.functionStringTable.entries[ref.referenceIndex].string}"' : "");
+										(outputVerbosity.has(DisassemblyVerbosity.ConstTableReferences) ? '<-\"${this.getStringTableValueFromRef(this.functionStringTable, ref.referenceIndex)}"' : "");
 
 									case GlobalFloatTable:
 										"GlobalFloatTable::" + StringTools.lpad('${ref.referenceIndex}', "0",
@@ -513,6 +565,11 @@ class Disassembler {
 										"FunctionFloatTable::" + StringTools.lpad('${ref.referenceIndex}', "0",
 											5) +
 										(outputVerbosity.has(DisassemblyVerbosity.ConstTableReferences) ? '<-\"${this.functionFloatTable[ref.referenceIndex]}"' : "");
+
+									case IdentTable:
+										"IdentTable::" + StringTools.lpad('${ref.referenceIndex}', "0",
+											5) +
+										(outputVerbosity.has(DisassemblyVerbosity.ConstTableReferences) ? '<-\"${this.identMap[ref.referenceIndex]}"' : "");
 
 									case Code:
 										"Code::" + StringTools.lpad('${ref.referenceIndex}', "0", 5);

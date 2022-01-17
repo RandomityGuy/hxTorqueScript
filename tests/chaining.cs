@@ -1,7 +1,7 @@
-new FileObject(Root);
-Root.A = new FileObject();
-Root.A.B[1,2,3] = new FileObject();
-Root.A.B[1,2,3].C = new FileObject();
+new SimObject(Root);
+Root.A = new SimObject();
+Root.A.B[1,2,3] = new SimObject();
+Root.A.B[1,2,3].C = new SimObject();
 
 $result::root = Root.getID();
 $result::a = Root.A.getID();

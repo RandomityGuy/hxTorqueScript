@@ -1,18 +1,18 @@
 new SimSet(Root)
 {
-    field = new SimGroup(field);
-
     new SimSet(ChildRoot)
     {
-        childField = new SimGroup(childField);
-
         new SimSet(Child)
         {
             testField = 5;
-            childArrayField[1, "A", 2] = new SimGroup(childArrayField);
         };
     };
 };
+
+Root.field = new SimGroup(field);
+ChildRoot.childField = new SimGroup(childField);
+Child.childArrayField[1, "A", 2] = new SimGroup(childArrayField);
+
 
 // Set result values
 $root::field = Root.field.getName();
