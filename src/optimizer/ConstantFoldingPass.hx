@@ -508,4 +508,8 @@ class ConstantFoldingPass implements IOptimizerPass {
 	public function visitObjectDeclExpr(expr:ObjectDeclExpr) {}
 
 	public function visitFunctionDeclStmt(stmt:FunctionDeclStmt) {}
+
+	public function getLevel():Int {
+		return 1;
+	}
 }

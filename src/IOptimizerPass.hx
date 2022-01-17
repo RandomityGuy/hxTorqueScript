@@ -10,6 +10,8 @@ import expr.Expr.Stmt;
 interface IOptimizerPass {
 	function optimize(ast:Array<Stmt>):Void;
 
+	function getLevel():Int;
+
 	function visitStmt(stmt:Stmt):Void;
 
 	function visitBreakStmt(stmt:BreakStmt):Void;

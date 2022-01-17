@@ -15,6 +15,7 @@ class Main {
 
 	static public function main():Void {
 		var args = Sys.args();
+		var oLevel = 3;
 
 		disasmVerbosity.set(Disassembler.DisassemblyVerbosity.Code);
 		disasmVerbosity.set(Disassembler.DisassemblyVerbosity.Args);
@@ -42,6 +43,10 @@ class Main {
 					isRun = true;
 				}
 
+				if (args[1].substring(0, 2) == '-O') {
+					oLevel = Std.parseInt(args[1].substring(2));
+				}
+
 				if (args.length > 2) {
 					if (args[2].substring(0, 2) == "-v") {
 						var chrs = args[2].substring(2);
@@ -67,7 +72,7 @@ class Main {
 				if (isDisassemble)
 					disasmDirectory(path);
 				else if (!isRun)
-					execDirectory(path);
+					execDirectory(path, oLevel);
 			} else {
 				if (isDisassemble)
 					disasmFile(path);
@@ -94,25 +99,25 @@ class Main {
 		// disam.disassembleCode();
 	}
 
-	static public function execDirectory(path:String) {
+	static public function execDirectory(path:String, optimizeLevel:Int) {
 		var files = FileSystem.readDirectory(path);
 
 		for (file in files) {
 			if (FileSystem.isDirectory(path + '/' + file)) {
-				execDirectory(path + '/' + file);
+				execDirectory(path + '/' + file, optimizeLevel);
 			} else {
 				if (Path.extension(file) == 'cs' || Path.extension(file) == 'gui' || Path.extension(file) == 'mcs') {
 					var f = File.getContent(path + '/' + file);
-					try {
-						var compiler = new Compiler();
-						var bytesB = compiler.compile(f);
-						File.saveBytes(path + '/' + file + '.dso', bytesB.getBytes());
-						trace('Compiled ${path}/${file}');
-						successFiles++;
-					} catch (e) {
-						trace('Failed compiling ${file}');
-						failedFiles++;
-					}
+					// try {
+					var compiler = new Compiler();
+					var bytesB = compiler.compile(f, optimizeLevel);
+					File.saveBytes(path + '/' + file + '.dso', bytesB.getBytes());
+					trace('Compiled ${path}/${file}');
+					successFiles++;
+					// } catch (e) {
+					// 	trace('Failed compiling ${file}');
+					// 	failedFiles++;
+					// }
 				}
 			}
 		}
@@ -182,6 +187,7 @@ class Main {
 						var dism = new Disassembler();
 						dism.load(new BytesInput(f));
 						var dcode = dism.disassembleCode();
+						trace('Disassembled ${path}/${file}');
 						File.saveContent(path + '/' + file + '.disasm', dism.writeDisassembly(dcode, disasmVerbosity));
 						successFiles++;
 					} catch (e) {

@@ -13,9 +13,10 @@ class Optimizer {
 		optimizerPasses = [new ConstantFoldingPass()];
 	}
 
-	public function optimize() {
+	public function optimize(level:Int) {
 		for (pass in optimizerPasses) {
-			pass.optimize(ast);
+			if (pass.getLevel() <= level)
+				pass.optimize(ast);
 		}
 	}
 

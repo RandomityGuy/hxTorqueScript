@@ -146,15 +146,15 @@ class Disassembler {
 
 	function getStringTableValueFromRef(table:String, ref:Int) {
 		var zeroCount = 0;
-		var str = "";
+		var str = new StringBuf();
 		for (i in 0...table.length) {
 			if (table.charCodeAt(i) == 0) {
 				if (zeroCount == ref)
-					return str;
-				str = "";
+					return str.toString();
+				str = new StringBuf();
 				zeroCount++;
 			} else {
-				str += table.charAt(i);
+				str.add(table.charAt(i));
 			}
 		}
 		return "";
@@ -443,19 +443,19 @@ class Disassembler {
 		var totalDism:Array<DisassmblyLine> = [];
 
 		var zeroCount = 0;
-		var str = "";
+		var str = new StringBuf();
 		for (i in 0...globalStringTable.length) {
 			if (globalStringTable.charCodeAt(i) == 0) {
 				totalDism.push({
 					type: LineType.GlobalStringTable,
 					lineNo: zeroCount,
 					opCode: cast 0,
-					args: [new DisassemblyConst(str)]
+					args: [new DisassemblyConst(str.toString())]
 				});
-				str = "";
+				str = new StringBuf();
 				zeroCount++;
 			} else {
-				str += globalStringTable.charAt(i);
+				str.add(globalStringTable.charAt(i));
 			}
 		}
 
@@ -469,19 +469,19 @@ class Disassembler {
 		}
 
 		var zeroCount = 0;
-		var str = "";
+		var str = new StringBuf();
 		for (i in 0...functionStringTable.length) {
 			if (functionStringTable.charCodeAt(i) == 0) {
 				totalDism.push({
 					type: LineType.FunctionStringTable,
 					lineNo: zeroCount,
 					opCode: cast 0,
-					args: [new DisassemblyConst(str)]
+					args: [new DisassemblyConst(str.toString())]
 				});
-				str = "";
+				str = new StringBuf();
 				zeroCount++;
 			} else {
-				str += functionStringTable.charAt(i);
+				str.add(globalStringTable.charAt(i));
 			}
 		}
 

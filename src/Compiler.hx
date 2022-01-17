@@ -253,7 +253,7 @@ class Compiler {
 		// }
 
 		var optimizer = new Optimizer(statementList);
-		// optimizer.optimize();
+		optimizer.optimize(optimizationLevel);
 
 		statementList = optimizer.getAST();
 

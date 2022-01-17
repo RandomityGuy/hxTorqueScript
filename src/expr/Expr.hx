@@ -1510,6 +1510,7 @@ class AssignOpExpr extends Expr {
 	}
 
 	public override function visitStmt(visitor:IOptimizerPass) {
+		this.getAssignOpTypeOp();
 		varExpr.visitStmt(visitor);
 		expr.visitStmt(visitor);
 		visitor.visitAssignOpExpr(this);
@@ -1873,6 +1874,7 @@ class SlotAssignOpExpr extends Expr {
 	}
 
 	public override function visitStmt(optimizerPass:IOptimizerPass) {
+		getAssignOpTypeOp();
 		if (objectExpr != null)
 			objectExpr.visitStmt(optimizerPass);
 		if (arrayExpr != null)
