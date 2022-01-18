@@ -438,6 +438,8 @@ class VM {
 
 	var codeBlocks:Array<CodeBlock> = [];
 
+	var traceOn:Bool = false;
+
 	public function new() {
 		evalState = new ExprEvalState(this);
 

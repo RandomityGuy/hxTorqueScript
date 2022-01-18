@@ -215,7 +215,7 @@ class Scanner {
 		addToken(tokenType, value);
 	}
 
-	function unescape(s:String) {
+	public static function unescape(s:String) {
 		var escapeMap = [
 			"\\t" => "\t", "\\n" => "\n", "\\r" => "\r", "\\\"" => "\"", "\\'" => "'", "\\\\" => "\\", "\\c0" => "\x01", "\\c1" => "\x02", "\\c2" => "\x03",
 			"\\c3" => "\x04", "\\c4" => "\x05", "\\c5" => "\x06", "\\c6" => "\x07", "\\c7" => "\x0B", "\\c8" => "\x0C", "\\c9" => "\x0E", "\\cr" => '\x0F',
@@ -235,6 +235,28 @@ class Scanner {
 		}
 
 		return newStr;
+	}
+
+	public static function escape(s:String) {
+		var escapeMap = [
+			"\t" => "\\t", "\n" => "\\n", "\r" => "\\r", "\"" => "\\\"", "'" => "\\'", "\\" => "\\\\", "\x01" => "\\c0", "\x02" => "\\c1", "\x03" => "\\c2",
+			"\x04" => "\\c3", "\x05" => "\\c4", "\x06" => "\\c5", "\x07" => "\\c6", "\x0B" => "\\c7", "\x0C" => "\\c8", "\x0E" => "\\c9", "\x0F" => "\\cr",
+			"\x10" => "\\cp", "\x11" => "\\co", "\x08" => "\\x08", "\x12" => "\\x12", "\x13" => "\\x13", "\x14" => "\\x14", "\x15" => "\\x15",
+			"\x16" => "\\x16", "\x17" => "\\x17", "\x18" => "\\x18", "\x19" => "\\x19", "\x1A" => "\\x1A", "\x1B" => "\\x1B", "\x1C" => "\\x1C",
+			"\x1D" => "\\x1D", "\x1E" => "\\x1E", "\x1F" => "\\x1F"
+		];
+		var tagged = false;
+		if (s.charCodeAt(0) == 0x02 && s.charCodeAt(1) == 0x01) {
+			s = s.substr(1);
+			tagged = true;
+		}
+		for (o => esc in escapeMap) {
+			s = StringTools.replace(s, o, esc);
+		}
+		if (tagged) {
+			s = "\x01" + s.substr(3);
+		}
+		return s;
 	}
 
 	function isDigit(c:String):Bool {

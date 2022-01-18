@@ -7,6 +7,19 @@ class SimSet extends SimObject {
 		super();
 	}
 
+	@:consoleMethod(usage = "set.listObjects()", minArgs = 2, maxArgs = 2)
+	public static function listObjects(vm:VM, thisObj:SimSet, args:Array<String>):Void {
+		for (obj in thisObj.objectList) {
+			var isSet = Std.downcast(obj, SimSet) != null;
+			var name = obj.name;
+			if (name != null) {
+				Sys.println('	${obj.id},"${name}": ${obj.getClassName()} ${isSet ? "(g)" : ""}');
+			} else {
+				Sys.println('	${obj.id}: ${obj.getClassName()} ${isSet ? "(g)" : ""}');
+			}
+		}
+	}
+
 	@:consoleMethod(usage = "set.add(obj1,...)", minArgs = 3, maxArgs = 0)
 	public static function add(vm:VM, thisObj:SimSet, args:Array<String>):Void {
 		for (i in 2...args.length) {
@@ -14,7 +27,7 @@ class SimSet extends SimObject {
 			if (addObj != null)
 				thisObj.addObject(addObj);
 			else
-				trace('Set::add: Object ${args[i]} does not exist.');
+				Sys.println('Set::add: Object ${args[i]} does not exist.');
 		}
 	}
 
@@ -25,7 +38,7 @@ class SimSet extends SimObject {
 			if (addObj != null)
 				thisObj.removeObject(addObj);
 			else
-				trace('Set::remove: Object ${args[i]} does not exist.');
+				Sys.println('Set::remove: Object ${args[i]} does not exist.');
 		}
 	}
 
@@ -44,7 +57,7 @@ class SimSet extends SimObject {
 	public static function getObject(vm:VM, thisObj:SimSet, args:Array<String>):Int {
 		var index = Std.parseInt(args[2]);
 		if (index < 0 || index >= thisObj.objectList.length) {
-			trace("Set::getObject: index out of range.");
+			Sys.println("Set::getObject: index out of range.");
 			return -1;
 		}
 		return thisObj.objectList[index].id;
@@ -54,7 +67,7 @@ class SimSet extends SimObject {
 	public static function isMember(vm:VM, thisObj:SimSet, args:Array<String>):Bool {
 		var findObj = thisObj.vm.findObject(args[2]);
 		if (findObj == null) {
-			trace('Set::isMember: ${args[2]} is not an object.');
+			Sys.println('Set::isMember: ${args[2]} is not an object.');
 			return false;
 		}
 		return thisObj.objectList.contains(findObj);
@@ -87,13 +100,5 @@ class SimSet extends SimObject {
 
 	public function removeObject(obj:SimObject) {
 		objectList.remove(obj);
-	}
-
-	public override function findObject(name:String):SimObject {
-		for (o in objectList) {
-			if (o.getName() == name)
-				return o;
-		}
-		return null;
 	}
 }

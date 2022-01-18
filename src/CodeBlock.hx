@@ -125,6 +125,26 @@ class CodeBlock {
 			var fnArgc = codeStream[ip + 5];
 			thisFunctionName = identMap.get(codeStream[ip]);
 			argc = cast Math.min(fnArgs.length - 1, fnArgc);
+
+			if (vm.traceOn) {
+				Sys.print("Entering ");
+				if (packageName != null) {
+					Sys.print('[${packageName}] ');
+				}
+				if (namespace != null && namespace.name != null) {
+					Sys.print('${namespace.name}::${thisFunctionName}(');
+				} else {
+					Sys.print('${thisFunctionName}(');
+				}
+				for (i in 0...argc) {
+					Sys.print('${fnArgs[i]}');
+					if (i != argc - 1) {
+						Sys.print(', ');
+					}
+				}
+				Sys.println(')');
+			}
+
 			vm.evalState.pushFrame(thisFunctionName, namespace);
 			for (i in 0...argc) {
 				var varName = identMap.get(codeStream[ip + 6 + i]);
@@ -529,20 +549,11 @@ class CodeBlock {
 					if (getStringTableValue(currentStringTable, codeStream[ip]).charCodeAt(0) != 1) {
 						var id = vm.taggedStrings.length;
 						vm.taggedStrings.push(getStringTableValue(currentStringTable, codeStream[ip]));
-						codeStream[ip] = 1; // StringTagPrefixByte
 						var idStr = '${id}';
-						if (idStr.length < 7) {
-							for (i in 0...idStr.length) {
-								codeStream[ip + 1 + i] = idStr.charCodeAt(i);
-							}
-							for (i in idStr.length...7) {
-								codeStream[ip + 1 + i] = 0;
-							}
-						} else {
-							for (i in 0...7) {
-								codeStream[ip + 1 + i] = idStr.charCodeAt(i);
-							}
-						}
+						var before = currentStringTable.substring(0, codeStream[ip]);
+						var after = currentStringTable.substring(codeStream[ip] + 8);
+						var insert = StringTools.rpad('\x01${idStr}', "\x00", 7);
+						currentStringTable = before + insert + after;
 					}
 
 				case OpCode.LoadImmedStr:
@@ -714,6 +725,18 @@ class CodeBlock {
 
 		if (fnArgs.length != 0) {
 			vm.evalState.popFrame();
+
+			if (vm.traceOn) {
+				Sys.print("Leaving ");
+				if (packageName != null) {
+					Sys.print('[${packageName}] ');
+				}
+				if (namespace != null && namespace.name != null) {
+					Sys.println('${namespace.name}::${thisFunctionName}() - return ${vm.STR.getSTValue()}');
+				} else {
+					Sys.println('${thisFunctionName}() - return ${vm.STR.getSTValue()}');
+				}
+			}
 		}
 
 		return vm.STR.getSTValue();

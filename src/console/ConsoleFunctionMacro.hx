@@ -36,6 +36,7 @@ class ConsoleFunctionMacro {
 							if (meta.name != ":consoleFunction")
 								continue;
 
+							var fnName = field.name;
 							var funUsage:String = "";
 							var minArgs = 0;
 							var maxArgs = 0;
@@ -47,6 +48,8 @@ class ConsoleFunctionMacro {
 										minArgs = Std.parseInt(v);
 									case EBinop(OpAssign, {expr: EConst(CIdent("maxArgs"))}, {expr: EConst(CInt(v))}):
 										maxArgs = Std.parseInt(v);
+									case EBinop(OpAssign, {expr: EConst(CIdent("name"))}, {expr: EConst(CString(s, kind))}):
+										fnName = s;
 									case _:
 										continue;
 								}
@@ -55,7 +58,7 @@ class ConsoleFunctionMacro {
 							switch (f.ret) {
 								case TPath({name: retType}):
 									var installExpr = macro {
-										vmObj.addConsoleFunction($v{field.name}, $v{funUsage}, $v{minArgs}, $v{maxArgs},
+										vmObj.addConsoleFunction($v{fnName}, $v{funUsage}, $v{minArgs}, $v{maxArgs},
 											$i{retType + "CallbackType"}((vm, s, arr) -> $i{field.name}(vm, s, arr)));
 									}
 									vmInstallExprs.push(installExpr);

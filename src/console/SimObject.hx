@@ -44,6 +44,27 @@ class SimObject extends ConsoleObject {
 		return thisObj.id;
 	}
 
+	@:consoleMethod(usage = "obj.getGroup()", minArgs = 2, maxArgs = 2)
+	public static function getGroup(vm:VM, thisObj:SimObject, args:Array<String>):Int {
+		return thisObj.group != null ? thisObj.group.id : -1;
+	}
+
+	@:consoleMethod(usage = "obj.delete()", minArgs = 2, maxArgs = 2)
+	public static function delete(vm:VM, thisObj:SimObject, args:Array<String>):Void {
+		thisObj.deleteObject();
+	}
+
+	public function deleteObject() {
+		if (vm != null) {
+			vm.idMap.remove(this.id);
+			if (vm.simObjects.exists(this.name)) {
+				if (vm.simObjects.get(this.name) == this) {
+					vm.simObjects.remove(this.name);
+				}
+			}
+		}
+	}
+
 	public function assignId(id:Int) {
 		this.id = id;
 	}
