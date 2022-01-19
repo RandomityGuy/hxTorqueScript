@@ -1,4 +1,5 @@
 -cp src
+--macro include("console")
 --hl bin/main.c
 
 --main Main

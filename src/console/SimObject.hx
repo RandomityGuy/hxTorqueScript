@@ -54,6 +54,12 @@ class SimObject extends ConsoleObject {
 		thisObj.deleteObject();
 	}
 
+	@:consoleMethod(usage = "object.schedule(time, command, <arg1...argN)", minArgs = 4, maxArgs = 0)
+	static function schedule(vm:VM, thisObj:SimObject, args:Array<String>):Int {
+		var timeDelta = Std.parseInt(args[2]);
+		return vm.schedule(timeDelta, thisObj, args.slice(3));
+	}
+
 	public function deleteObject() {
 		if (vm != null) {
 			vm.idMap.remove(this.id);

@@ -29,6 +29,37 @@ class ConsoleFunctions {
 		return false;
 	}
 
+	@:consoleFunction(usage = "cancel(eventId)", minArgs = 2, maxArgs = 2)
+	static function cancelEvent(vm:VM, thisObj:SimObject, args:Array<String>):Void {
+		vm.cancelEvent(Std.parseInt(args[1]));
+	}
+
+	@:consoleFunction(usage = "isEventPending(eventId)", minArgs = 2, maxArgs = 2)
+	static function isEventPending(vm:VM, thisObj:SimObject, args:Array<String>):Bool {
+		return vm.isEventPending(Std.parseInt(args[1]));
+	}
+
+	@:consoleFunction(usage = "schedule(time, refobject|0, command, <arg1...argN)", minArgs = 4, maxArgs = 0)
+	static function schedule(vm:VM, thisObj:SimObject, args:Array<String>):Int {
+		var timeDelta = Std.parseInt(args[1]);
+		var obj = vm.findObject(args[2]);
+		if (obj == null) {
+			if (args[2] != '0')
+				return 0;
+		}
+		return vm.schedule(timeDelta, obj, args.slice(3));
+	}
+
+	@:consoleFunction(usage = "getSimTime()", minArgs = 1, maxArgs = 1)
+	static function getSimTime(vm:VM, thisObj:SimObject, args:Array<String>):Int {
+		return cast(Sys.time() * 1000) - vm.startTime;
+	}
+
+	@:consoleFunction(usage = "getRealTime()", minArgs = 1, maxArgs = 1)
+	static function getRealTime(vm:VM, thisObj:SimObject, args:Array<String>):Int {
+		return cast(Sys.time() * 1000);
+	}
+
 	// String functions
 
 	@:consoleFunction(usage = "expandFilename(filename)", minArgs = 2, maxArgs = 2)

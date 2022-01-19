@@ -50,6 +50,7 @@ class ConsoleObjectMacro {
 											$i{retType + "CallbackType"}((vm, s, arr) -> $i{field.name}(vm, cast s, arr)));
 									}
 									vmInstallExprs.push(installExpr);
+									trace('Registering console method ${Context.getLocalClass().get().name}::${fnName}');
 								case _:
 									continue;
 							}

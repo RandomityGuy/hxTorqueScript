@@ -34,7 +34,7 @@ class Main {
 			var path = args[0];
 
 			if (path == "REPL") {
-				var vm = new VM();
+				var vm = new VM(true);
 				while (true) {
 					Sys.print("% ");
 					var line = Sys.stdin().readLine();
@@ -161,6 +161,7 @@ class Main {
 		// try {
 		var vm = new VM();
 		vm.exec(path);
+		return vm;
 		// } catch (e) {
 		// 	trace('Failed compiling ${path}');
 		// 	trace(e.toString());

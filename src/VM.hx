@@ -1,5 +1,10 @@
 package;
 
+import console.MathFunctions;
+import sys.thread.EventLoop.EventHandler;
+import sys.thread.Thread;
+import haxe.MainLoop;
+import haxe.Timer;
 import sys.io.File;
 import console.Namespace.FunctionType;
 import console.ConsoleFunctions;
@@ -440,15 +445,30 @@ class VM {
 
 	var traceOn:Bool = false;
 
-	public function new() {
+	var schedules:Map<Int, EventHandler> = [];
+	var nextScheduleId = 1;
+
+	var vmThread:Thread;
+
+	var startTime:Int;
+
+	public function new(async:Bool = false) {
 		evalState = new ExprEvalState(this);
 
 		this.namespaces.push(new Namespace(null, null, null));
 
 		ConsoleFunctions.install(this);
+		MathFunctions.install(this);
 		ConsoleObjectConstructors.install(this);
 
 		rootGroup.register(this);
+
+		if (async) {
+			vmThread = Thread.createWithEventLoop(() -> {});
+			vmThread.events.promise();
+		}
+
+		this.startTime = cast(Sys.time() * 1000);
 	}
 
 	public function exec(path:String) {
@@ -562,5 +582,106 @@ class VM {
 
 	public function findObject(name:String) {
 		return simObjects.exists(name) ? simObjects.get(name) : (idMap.exists(Std.parseInt(name)) ? idMap.get(Std.parseInt(name)) : null);
+	}
+
+	public function schedule(time:Int, refObject:SimObject, args:Array<String>) {
+		if (this.vmThread != null) {
+			var sch:EventHandler = null;
+			var schId = nextScheduleId++;
+			sch = vmThread.events.repeat(() -> {
+				callFunction(refObject, args);
+				if (schedules.exists(schId)) {
+					schedules.remove(schId);
+				}
+				vmThread.events.cancel(sch);
+			}, time);
+
+			schedules[schId] = sch;
+			return schId;
+		} else {
+			callFunction(refObject, args);
+			return 0;
+		}
+	}
+
+	public function isEventPending(eventId:Int) {
+		if (this.vmThread != null) {
+			return schedules.exists(eventId);
+		} else {
+			return false;
+		}
+	}
+
+	public function cancelEvent(eventId:Int) {
+		if (this.vmThread != null) {
+			if (schedules.exists(eventId)) {
+				vmThread.events.cancel(schedules[eventId]);
+				schedules.remove(eventId);
+			}
+		}
+	}
+
+	public function callFunction(simObject:SimObject, args:Array<String>) {
+		if (simObject == null) {
+			var func = findFunction(null, args[0]);
+
+			if (func == null) {
+				Sys.println('${args[0]}: Unknown command.');
+			}
+			execute(func, args);
+		} else {
+			var func = findFunction(simObject.getClassName(), args[0]);
+
+			if (func != null) {
+				var save = evalState.thisObject;
+				evalState.thisObject = simObject;
+				execute(func, args);
+				// Execute
+				evalState.thisObject = save;
+			}
+		}
+	}
+
+	public function dispose() {
+		if (this.vmThread != null) {
+			vmThread.events.runPromised(() -> {});
+			vmThread = null;
+		}
+	}
+
+	public function execute(ns:NamespaceEntry, args:Array<String>) {
+		switch (ns.type) {
+			case ScriptFunctionType(functionOffset, codeBlock):
+				if (functionOffset > 0)
+					return codeBlock.exec(functionOffset, args[0], ns.namespace, args, false, ns.pkg);
+				else
+					return "";
+			case x:
+				if ((ns.minArgs > 0 && args.length < ns.minArgs) || (ns.maxArgs > 0 && args.length > ns.maxArgs)) {
+					Sys.println('${ns.namespace.name}::${ns.functionName} - wrong number of arguments.');
+					Sys.println('usage: ${ns.usage}');
+					return "";
+				}
+				switch (x) {
+					case StringCallbackType(callback):
+						return callback(this, this.evalState.thisObject, args);
+
+					case IntCallbackType(callback):
+						return '${callback(this, this.evalState.thisObject, args)}';
+
+					case FloatCallbackType(callback):
+						return '${callback(this, this.evalState.thisObject, args)}';
+
+					case VoidCallbackType(callback):
+						callback(this, this.evalState.thisObject, args);
+						return "";
+
+					case BoolCallbackType(callback):
+						return '${callback(this, this.evalState.thisObject, args)}';
+
+					case ScriptFunctionType(functionOffset, codeBlock):
+						return ""; // It should never reach here
+				}
+		}
 	}
 }
