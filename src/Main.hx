@@ -1,5 +1,6 @@
 package;
 
+#if sys
 import haxe.EnumFlags;
 import haxe.io.Bytes;
 import haxe.io.BytesInput;
@@ -23,35 +24,37 @@ class Main {
 		disasmVerbosity.set(Disassembler.DisassemblyVerbosity.ConstTableReferences);
 
 		if (args.length == 0) {
-			Sys.println("Usage: ");
-			Sys.println("hxTorqueScript <path/directory> [-d] [-v[atr]] [-r] [-On] [REPL]");
-			Sys.println("-d: disassemble");
-			Sys.println("-v: a: args t: const tables r: const table references");
-			Sys.println("-r: run dso");
-			Sys.println("-On: optimization level where n is a number. 0 disables all optimization.");
-			Sys.println("REPL: Starts a REPL, do not input path/directory, use this as the first argument.");
+			Log.println("Usage: ");
+			Log.println("hxTorqueScript <path/directory> [-d] [-v[atr]] [-r] [-On] [REPL]");
+			Log.println("-d: disassemble");
+			Log.println("-v: a: args t: const tables r: const table references");
+			Log.println("-r: run dso");
+			Log.println("-On: optimization level where n is a number. 0 disables all optimization.");
+			Log.println("-js: transpile to Javascript");
+			Log.println("REPL: Starts a REPL, do not input path/directory, use this as the first argument.");
 		} else {
 			var path = args[0];
 
 			if (path == "REPL") {
 				var vm = new VM(true);
 				while (true) {
-					Sys.print("% ");
+					Log.print("% ");
 					var line = Sys.stdin().readLine();
 					try {
 						var compiler = new Compiler();
 						var bytes = compiler.compile(line);
 						var code = new CodeBlock(vm, null);
 						code.load(new BytesInput(bytes.getBytes()));
-						Sys.println(code.exec(0, null, null, [], false, null));
+						Log.println(code.exec(0, null, null, [], false, null));
 					} catch (e) {
-						Sys.println("Syntax error");
+						Log.println("Syntax error");
 					}
 				}
 			} else {
 				var isRun = false;
 
 				var isDisassemble = false;
+				var isTranspile = false;
 				if (args.length > 1) {
 					if (args[1] == "-d") {
 						isDisassemble = true;
@@ -59,6 +62,10 @@ class Main {
 
 					if (args[1] == "-r") {
 						isRun = true;
+					}
+
+					if (args[1] == "-js") {
+						isTranspile = true;
 					}
 
 					if (args[1].substring(0, 2) == '-O') {
@@ -87,12 +94,16 @@ class Main {
 				}
 
 				if (FileSystem.isDirectory(path)) {
-					if (isDisassemble)
+					if (isTranspile)
+						transpileDirectory(path);
+					else if (isDisassemble)
 						disasmDirectory(path);
 					else if (!isRun)
 						execDirectory(path, oLevel);
 				} else {
-					if (isDisassemble)
+					if (isTranspile)
+						transpileFile(path);
+					else if (isDisassemble)
 						disasmFile(path);
 					else if (!isRun)
 						execFile(path);
@@ -169,6 +180,16 @@ class Main {
 		// }
 	}
 
+	static public function transpileFile(path:String) {
+		var f = File.getContent(path);
+		var scanner = new Scanner(f);
+		var toks = scanner.scanTokens();
+		var parser = new Parser(toks);
+		var exprs = parser.parse();
+		var tsgen = new JSGenerator(exprs);
+		File.saveContent(path + '.js', tsgen.generate());
+	}
+
 	static public function parseDirectory(path:String) {
 		var files = FileSystem.readDirectory(path);
 
@@ -188,6 +209,32 @@ class Main {
 						trace('Failed parsing ${file}');
 						failedFiles++;
 					}
+				}
+			}
+		}
+	}
+
+	static public function transpileDirectory(path:String) {
+		var files = FileSystem.readDirectory(path);
+
+		for (file in files) {
+			if (FileSystem.isDirectory(path + '/' + file)) {
+				transpileDirectory(path + '/' + file);
+			} else {
+				if (Path.extension(file) == 'cs' || Path.extension(file) == 'gui') {
+					var f = File.getContent(path + '/' + file);
+					// try {
+					var scanner = new Scanner(f);
+					var toks = scanner.scanTokens();
+					var parser = new Parser(toks);
+					var exprs = parser.parse();
+					var tsgen = new JSGenerator(exprs);
+					File.saveContent(path + '/' + file + '.js', tsgen.generate());
+					successFiles++;
+					// } catch (e) {
+					// 	trace('Failed parsing ${file}');
+					// 	failedFiles++;
+					// }
 				}
 			}
 		}
@@ -233,3 +280,4 @@ class Main {
 		// }
 	}
 }
+#end

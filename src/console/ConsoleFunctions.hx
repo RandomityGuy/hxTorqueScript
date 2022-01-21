@@ -2,8 +2,10 @@ package console;
 
 import haxe.io.Path;
 import haxe.io.BytesInput;
+#if sys
 import sys.io.File;
 import sys.FileSystem;
+#end
 
 @:build(console.ConsoleFunctionMacro.build())
 class ConsoleFunctions {
@@ -52,16 +54,26 @@ class ConsoleFunctions {
 
 	@:consoleFunction(usage = "getSimTime()", minArgs = 1, maxArgs = 1)
 	static function getSimTime(vm:VM, thisObj:SimObject, args:Array<String>):Int {
+		#if js
+		return cast(js.lib.Date.now() * 1000) - vm.startTime;
+		#end
+		#if sys
 		return cast(Sys.time() * 1000) - vm.startTime;
+		#end
 	}
 
 	@:consoleFunction(usage = "getRealTime()", minArgs = 1, maxArgs = 1)
 	static function getRealTime(vm:VM, thisObj:SimObject, args:Array<String>):Int {
+		#if js
+		return cast(js.lib.Date.now() * 1000);
+		#end
+		#if sys
 		return cast(Sys.time() * 1000);
+		#end
 	}
 
 	// String functions
-
+	#if sys
 	@:consoleFunction(usage = "expandFilename(filename)", minArgs = 2, maxArgs = 2)
 	static function expandFilename(vm:VM, thisObj:SimObject, args:Array<String>):String {
 		var path = args[1];
@@ -70,6 +82,7 @@ class ConsoleFunctions {
 
 		return FileSystem.absolutePath(path);
 	}
+	#end
 
 	@:consoleFunction(usage = "strcmp(string one, string two)", minArgs = 3, maxArgs = 3)
 	static function strcmp(vm:VM, thisObj:SimObject, args:Array<String>):Int {
@@ -413,17 +426,17 @@ class ConsoleFunctions {
 
 	@:consoleFunction(usage = "echo(value, ...)", minArgs = 2, maxArgs = 0)
 	static function echo(vm:VM, thisObj:SimObject, args:Array<String>):Void {
-		Sys.println(args.slice(1).join(""));
+		Log.println(args.slice(1).join(""));
 	}
 
 	@:consoleFunction(usage = "warn(value, ...)", minArgs = 2, maxArgs = 0)
 	static function warn(vm:VM, thisObj:SimObject, args:Array<String>):Void {
-		Sys.println("Warning: " + args.slice(1).join(""));
+		Log.println("Warning: " + args.slice(1).join(""));
 	}
 
 	@:consoleFunction(usage = "error(value, ...)", minArgs = 2, maxArgs = 0)
 	static function error(vm:VM, thisObj:SimObject, args:Array<String>):Void {
-		Sys.println("Error: " + args.slice(1).join(""));
+		Log.println("Error: " + args.slice(1).join(""));
 	}
 
 	@:consoleFunction(usage = "expandEscape(text)", minArgs = 2, maxArgs = 2)
@@ -436,6 +449,7 @@ class ConsoleFunctions {
 		return Scanner.unescape(args[1]);
 	}
 
+	#if sys
 	@:consoleFunction(usage = "quit()", minArgs = 1, maxArgs = 1)
 	static function quit(vm:VM, thisObj:SimObject, args:Array<String>):Void {
 		Sys.exit(0);
@@ -447,11 +461,11 @@ class ConsoleFunctions {
 	static function compile(vm:VM, thisObj:SimObject, args:Array<String>):Bool {
 		var f = args[1];
 		if (!FileSystem.exists(f)) {
-			Sys.println('exec: invalid script file ${f}');
+			Log.println('exec: invalid script file ${f}');
 			return false;
 		}
 		var compiler = new Compiler();
-		Sys.println('Compiling ${f}...');
+		Log.println('Compiling ${f}...');
 		var dso = compiler.compile(File.getContent(f));
 		File.saveBytes(f + '.dso', dso.getBytes());
 		return true;
@@ -461,23 +475,24 @@ class ConsoleFunctions {
 	static function exec(vm:VM, thisObj:SimObject, args:Array<String>):Bool {
 		var f = args[1];
 		if (!FileSystem.exists(f) && !FileSystem.exists(f + '.dso')) {
-			Sys.println('exec: invalid script file ${f}');
+			Log.println('exec: invalid script file ${f}');
 			return false;
 		}
 		if (FileSystem.exists(f)) {
 			var compiler = new Compiler();
-			Sys.println('Compiling ${f}...');
+			Log.println('Compiling ${f}...');
 			var dso = compiler.compile(File.getContent(f));
 			File.saveBytes(f + '.dso', dso.getBytes());
 		}
 
 		if (FileSystem.exists(f + '.dso')) {
-			Sys.println('Loading compiled script ${f}.');
+			Log.println('Loading compiled script ${f}.');
 			vm.exec(f);
 		}
 
 		return true;
 	}
+	#end
 
 	@:consoleFunction(usage = "eval(consoleString)", minArgs = 2, maxArgs = 2)
 	static function eval(vm:VM, thisObj:SimObject, args:Array<String>):String {
@@ -488,7 +503,7 @@ class ConsoleFunctions {
 			code.load(new BytesInput(bytes.getBytes()));
 			return code.exec(0, null, null, [], false, null);
 		} catch (e) {
-			Sys.println("Syntax error in input");
+			Log.println("Syntax error in input");
 			return "";
 		}
 	}
@@ -496,10 +511,11 @@ class ConsoleFunctions {
 	@:consoleFunction(name = "trace", usage = "trace(bool)", minArgs = 2, maxArgs = 2)
 	static function trace_function(vm:VM, thisObj:SimObject, args:Array<String>):Void {
 		vm.traceOn = Std.parseInt(args[1]) > 0;
-		Sys.println('Console trace is ${vm.traceOn ? "on" : "off"}.');
+		Log.println('Console trace is ${vm.traceOn ? "on" : "off"}.');
 	}
 
 	// FileSystem
+	#if sys
 	static var findFiles:Array<String> = null;
 
 	static var findFilesIndex:Int = 0;
@@ -613,6 +629,7 @@ class ConsoleFunctions {
 	static function isFile(vm:VM, thisObj:SimObject, args:Array<String>):Bool {
 		return FileSystem.exists(args[1]);
 	}
+	#end
 
 	@:consoleFunction(usage = "fileExt(fileName)", minArgs = 2, maxArgs = 2)
 	static function fileExt(vm:VM, thisObj:SimObject, args:Array<String>):String {

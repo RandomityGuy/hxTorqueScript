@@ -1,0 +1,7 @@
+-cp src
+
+--macro include("console")
+--js bin/hxTorquescript.js
+--macro exclude("src/Main.hx")
+-D js-es=6
+-D shallow-expose

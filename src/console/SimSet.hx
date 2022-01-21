@@ -13,9 +13,9 @@ class SimSet extends SimObject {
 			var isSet = Std.downcast(obj, SimSet) != null;
 			var name = obj.name;
 			if (name != null) {
-				Sys.println('	${obj.id},"${name}": ${obj.getClassName()} ${isSet ? "(g)" : ""}');
+				Log.println('	${obj.id},"${name}": ${obj.getClassName()} ${isSet ? "(g)" : ""}');
 			} else {
-				Sys.println('	${obj.id}: ${obj.getClassName()} ${isSet ? "(g)" : ""}');
+				Log.println('	${obj.id}: ${obj.getClassName()} ${isSet ? "(g)" : ""}');
 			}
 		}
 	}
@@ -27,7 +27,7 @@ class SimSet extends SimObject {
 			if (addObj != null)
 				thisObj.addObject(addObj);
 			else
-				Sys.println('Set::add: Object ${args[i]} does not exist.');
+				Log.println('Set::add: Object ${args[i]} does not exist.');
 		}
 	}
 
@@ -38,7 +38,7 @@ class SimSet extends SimObject {
 			if (addObj != null)
 				thisObj.removeObject(addObj);
 			else
-				Sys.println('Set::remove: Object ${args[i]} does not exist.');
+				Log.println('Set::remove: Object ${args[i]} does not exist.');
 		}
 	}
 
@@ -57,7 +57,7 @@ class SimSet extends SimObject {
 	public static function getObject(vm:VM, thisObj:SimSet, args:Array<String>):Int {
 		var index = Std.parseInt(args[2]);
 		if (index < 0 || index >= thisObj.objectList.length) {
-			Sys.println("Set::getObject: index out of range.");
+			Log.println("Set::getObject: index out of range.");
 			return -1;
 		}
 		return thisObj.objectList[index].id;
@@ -67,7 +67,7 @@ class SimSet extends SimObject {
 	public static function isMember(vm:VM, thisObj:SimSet, args:Array<String>):Bool {
 		var findObj = thisObj.vm.findObject(args[2]);
 		if (findObj == null) {
-			Sys.println('Set::isMember: ${args[2]} is not an object.');
+			Log.println('Set::isMember: ${args[2]} is not an object.');
 			return false;
 		}
 		return thisObj.objectList.contains(findObj);

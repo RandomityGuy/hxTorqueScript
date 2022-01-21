@@ -41,7 +41,7 @@ class Stmt {
 		}
 	}
 
-	function visitStmt(optimizerPass:IOptimizerPass) {
+	function visitStmt(optimizerPass:IASTVisitor) {
 		optimizerPass.visitStmt(this);
 	}
 
@@ -76,7 +76,7 @@ class Stmt {
 		return context.ip;
 	}
 
-	static function visitBlock(optimizerPass:IOptimizerPass, stmts:Array<Stmt>) {
+	static function visitBlock(optimizerPass:IASTVisitor, stmts:Array<Stmt>) {
 		for (s in stmts) {
 			s.visitStmt(optimizerPass);
 		}
@@ -109,7 +109,7 @@ class BreakStmt extends Stmt {
 		return context.ip;
 	}
 
-	public override function visitStmt(optimizerPass:IOptimizerPass) {
+	public override function visitStmt(optimizerPass:IASTVisitor) {
 		optimizerPass.visitBreakStmt(this);
 	}
 }
@@ -140,7 +140,7 @@ class ContinueStmt extends Stmt {
 		return context.ip;
 	}
 
-	public override function visitStmt(optimizerPass:IOptimizerPass) {
+	public override function visitStmt(optimizerPass:IASTVisitor) {
 		optimizerPass.visitContinueStmt(this);
 	}
 }
@@ -173,7 +173,7 @@ class Expr extends Stmt {
 		return ReqNone;
 	}
 
-	public override function visitStmt(optimizerPass:IOptimizerPass) {
+	public override function visitStmt(optimizerPass:IASTVisitor) {
 		optimizerPass.visitExpr(this);
 	}
 
@@ -245,7 +245,7 @@ class ParenthesisExpr extends Expr {
 		return expr.getPrefferredType();
 	}
 
-	public override function visitStmt(optimizerPass:IOptimizerPass) {
+	public override function visitStmt(optimizerPass:IASTVisitor) {
 		expr.visitStmt(optimizerPass);
 		return optimizerPass.visitParenthesisExpr(this);
 	}
@@ -282,7 +282,7 @@ class ReturnStmt extends Stmt {
 		return context.ip;
 	}
 
-	public override function visitStmt(optimizerPass:IOptimizerPass) {
+	public override function visitStmt(optimizerPass:IASTVisitor) {
 		if (expr != null)
 			this.expr.visitStmt(optimizerPass);
 		optimizerPass.visitReturnStmt(this);
@@ -359,7 +359,7 @@ class IfStmt extends Stmt {
 		return context.ip;
 	}
 
-	public override function visitStmt(optimizerPass:IOptimizerPass) {
+	public override function visitStmt(optimizerPass:IASTVisitor) {
 		condition.visitStmt(optimizerPass);
 		Stmt.visitBlock(optimizerPass, body);
 		if (elseBlock != null)
@@ -451,7 +451,7 @@ class LoopStmt extends Stmt {
 		return context.ip;
 	}
 
-	public override function visitStmt(optimizerPass:IOptimizerPass) {
+	public override function visitStmt(optimizerPass:IASTVisitor) {
 		condition.visitStmt(optimizerPass);
 		if (init != null)
 			init.visitStmt(optimizerPass);
@@ -526,7 +526,7 @@ class FloatBinaryExpr extends BinaryExpr {
 		return context.ip;
 	}
 
-	public override function visitStmt(visitor:IOptimizerPass) {
+	public override function visitStmt(visitor:IASTVisitor) {
 		if (optimized)
 			optimizedExpr.visitStmt(visitor);
 		else {
@@ -617,7 +617,7 @@ class IntBinaryExpr extends BinaryExpr {
 		return context.ip;
 	}
 
-	public override function visitStmt(visitor:IOptimizerPass) {
+	public override function visitStmt(visitor:IASTVisitor) {
 		if (optimized)
 			optimizedExpr.visitStmt(visitor);
 		else {
@@ -678,7 +678,7 @@ class StrEqExpr extends BinaryExpr {
 		return context.ip;
 	}
 
-	public override function visitStmt(visitor:IOptimizerPass) {
+	public override function visitStmt(visitor:IASTVisitor) {
 		if (optimized)
 			optimizedExpr.visitStmt(visitor);
 		else {
@@ -757,7 +757,7 @@ class StrCatExpr extends BinaryExpr {
 		return context.ip;
 	}
 
-	public override function visitStmt(visitor:IOptimizerPass) {
+	public override function visitStmt(visitor:IASTVisitor) {
 		if (optimized)
 			optimizedExpr.visitStmt(visitor);
 		else {
@@ -869,7 +869,7 @@ class ConditionalExpr extends Expr {
 		return trueExpr.getPrefferredType();
 	}
 
-	public override function visitStmt(visitor:IOptimizerPass) {
+	public override function visitStmt(visitor:IASTVisitor) {
 		condition.visitStmt(visitor);
 		trueExpr.visitStmt(visitor);
 		falseExpr.visitStmt(visitor);
@@ -930,7 +930,7 @@ class IntUnaryExpr extends Expr {
 		return ReqInt;
 	}
 
-	public override function visitStmt(visitor:IOptimizerPass) {
+	public override function visitStmt(visitor:IASTVisitor) {
 		if (optimized)
 			optimizedExpr.visitStmt(visitor);
 		else {
@@ -982,7 +982,7 @@ class FloatUnaryExpr extends Expr {
 		return ReqFloat;
 	}
 
-	public override function visitStmt(visitor:IOptimizerPass) {
+	public override function visitStmt(visitor:IASTVisitor) {
 		if (optimized)
 			optimizedExpr.visitStmt(visitor);
 		else {
@@ -1066,7 +1066,7 @@ class VarExpr extends Expr {
 		return ReqNone;
 	}
 
-	public override function visitStmt(visitor:IOptimizerPass) {
+	public override function visitStmt(visitor:IASTVisitor) {
 		if (arrayIndex != null)
 			arrayIndex.visitStmt(visitor);
 		visitor.visitVarExpr(this);
@@ -1120,7 +1120,7 @@ class IntExpr extends Expr {
 		return ReqInt;
 	}
 
-	public override function visitStmt(visitor:IOptimizerPass) {
+	public override function visitStmt(visitor:IASTVisitor) {
 		visitor.visitIntExpr(this);
 	}
 }
@@ -1172,7 +1172,7 @@ class FloatExpr extends Expr {
 		return ReqFloat;
 	}
 
-	public override function visitStmt(visitor:IOptimizerPass) {
+	public override function visitStmt(visitor:IASTVisitor) {
 		visitor.visitFloatExpr(this);
 	}
 }
@@ -1232,7 +1232,7 @@ class StringConstExpr extends Expr {
 		return ReqString;
 	}
 
-	public override function visitStmt(visitor:IOptimizerPass) {
+	public override function visitStmt(visitor:IASTVisitor) {
 		visitor.visitStringConstExpr(this);
 	}
 }
@@ -1291,7 +1291,7 @@ class ConstantExpr extends Expr {
 		return ReqString;
 	}
 
-	public override function visitStmt(visitor:IOptimizerPass) {
+	public override function visitStmt(visitor:IASTVisitor) {
 		visitor.visitConstantExpr(this);
 	}
 }
@@ -1382,7 +1382,7 @@ class AssignExpr extends Expr {
 		return expr.getPrefferredType();
 	}
 
-	public override function visitStmt(visitor:IOptimizerPass) {
+	public override function visitStmt(visitor:IASTVisitor) {
 		varExpr.visitStmt(visitor);
 		expr.visitStmt(visitor);
 		visitor.visitAssignExpr(this);
@@ -1509,7 +1509,7 @@ class AssignOpExpr extends Expr {
 		return subType;
 	}
 
-	public override function visitStmt(visitor:IOptimizerPass) {
+	public override function visitStmt(visitor:IASTVisitor) {
 		this.getAssignOpTypeOp();
 		varExpr.visitStmt(visitor);
 		expr.visitStmt(visitor);
@@ -1579,7 +1579,7 @@ class FuncCallExpr extends Expr {
 		return ReqString;
 	}
 
-	public override function visitStmt(optimizerPass:IOptimizerPass) {
+	public override function visitStmt(optimizerPass:IASTVisitor) {
 		for (i in 0...args.length) {
 			args[i].visitStmt(optimizerPass);
 		}
@@ -1665,7 +1665,7 @@ class SlotAccessExpr extends Expr {
 		return ReqNone;
 	}
 
-	public override function visitStmt(optimizerPass:IOptimizerPass) {
+	public override function visitStmt(optimizerPass:IASTVisitor) {
 		objectExpr.visitStmt(optimizerPass);
 		if (arrayExpr != null)
 			arrayExpr.visitStmt(optimizerPass);
@@ -1743,7 +1743,7 @@ class SlotAssignExpr extends Expr {
 		return ReqString;
 	}
 
-	public override function visitStmt(optimizerPass:IOptimizerPass) {
+	public override function visitStmt(optimizerPass:IASTVisitor) {
 		if (objectExpr != null)
 			objectExpr.visitStmt(optimizerPass);
 		if (arrayExpr != null)
@@ -1873,7 +1873,7 @@ class SlotAssignOpExpr extends Expr {
 		return subType;
 	}
 
-	public override function visitStmt(optimizerPass:IOptimizerPass) {
+	public override function visitStmt(optimizerPass:IASTVisitor) {
 		getAssignOpTypeOp();
 		if (objectExpr != null)
 			objectExpr.visitStmt(optimizerPass);
@@ -1981,7 +1981,7 @@ class ObjectDeclExpr extends Expr {
 		return ReqInt;
 	}
 
-	public override function visitStmt(optimizerPass:IOptimizerPass) {
+	public override function visitStmt(optimizerPass:IASTVisitor) {
 		className.visitStmt(optimizerPass);
 		objectNameExpr.visitStmt(optimizerPass);
 		for (arg in args)
@@ -2068,12 +2068,11 @@ class FunctionDeclStmt extends Stmt {
 		return context.ip;
 	}
 
-	public override function visitStmt(optimizerPass:IOptimizerPass) {
+	public override function visitStmt(optimizerPass:IASTVisitor) {
+		optimizerPass.visitFunctionDeclStmt(this);
 		for (arg in args)
 			arg.visitStmt(optimizerPass);
 		for (stmt in stmts)
 			stmt.visitStmt(optimizerPass);
-
-		optimizerPass.visitFunctionDeclStmt(this);
 	}
 }

@@ -1,26 +1,22 @@
 package;
 
 import console.MathFunctions;
+#if sys
 import sys.thread.EventLoop.EventHandler;
 import sys.thread.Thread;
+import sys.io.File;
+#end
 import haxe.MainLoop;
 import haxe.Timer;
-import sys.io.File;
 import console.Namespace.FunctionType;
 import console.ConsoleFunctions;
-import Compiler.IdentTable;
-import haxe.Exception;
 import haxe.io.BytesInput;
-import expr.Expr.FuncCallExpr;
-import expr.Expr.FuncCallType;
 import console.Namespace.NamespaceEntry;
 import console.SimSet;
 import console.SimGroup;
-import sys.net.Address;
 import console.ConsoleObjectConstructors;
 import console.SimDataBlock;
 import console.SimObject;
-import expr.OpCode;
 import haxe.ds.GenericStack;
 import haxe.io.Bytes;
 import console.Namespace.Namespace;
@@ -348,7 +344,7 @@ class ExprEvalState {
 		else if (stackVars.length > 0)
 			thisVariable = stackVars[stackVars.length - 1].get(name);
 		if (thisVariable == null)
-			Sys.println("Warning: Undefined variable '" + name + "'");
+			Log.println("Warning: Undefined variable '" + name + "'");
 	}
 
 	public function setCurVarNameCreate(name:String) {
@@ -368,7 +364,7 @@ class ExprEvalState {
 			}
 		} else {
 			thisVariable = null;
-			Sys.println("Warning: Accessing local variable '" + name + "' in global scope!");
+			Log.println("Warning: Accessing local variable '" + name + "' in global scope!");
 		}
 	}
 
@@ -445,12 +441,19 @@ class VM {
 
 	var traceOn:Bool = false;
 
+	#if sys
 	var schedules:Map<Int, EventHandler> = [];
 	var nextScheduleId = 1;
-
 	var vmThread:Thread;
+	#end
+
+	#if js
+	var schedules:Array<Int> = [];
+	#end
 
 	var startTime:Int;
+
+	var isAsync:Bool = false;
 
 	public function new(async:Bool = false) {
 		evalState = new ExprEvalState(this);
@@ -463,14 +466,24 @@ class VM {
 
 		rootGroup.register(this);
 
+		isAsync = async;
+
+		#if sys
 		if (async) {
 			vmThread = Thread.createWithEventLoop(() -> {});
 			vmThread.events.promise();
 		}
+		#end
 
+		#if sys
 		this.startTime = cast(Sys.time() * 1000);
+		#end
+		#if js
+		this.startTime = cast(js.lib.Date.now() * 1000);
+		#end
 	}
 
+	#if sys
 	public function exec(path:String) {
 		var code = new CodeBlock(this, path);
 		code.load(new BytesInput(File.getBytes(path)));
@@ -478,6 +491,7 @@ class VM {
 		if (code.addedFunctions)
 			codeBlocks.push(code);
 	}
+	#end
 
 	public function findNamespace(name:String) {
 		var nsList = this.namespaces.filter(x -> x.name != null ? (x.name.toLowerCase() == name.toLowerCase()) : x.name == name);
@@ -585,7 +599,8 @@ class VM {
 	}
 
 	public function schedule(time:Int, refObject:SimObject, args:Array<String>) {
-		if (this.vmThread != null) {
+		if (this.isAsync) {
+			#if sys
 			var sch:EventHandler = null;
 			var schId = nextScheduleId++;
 			sch = vmThread.events.repeat(() -> {
@@ -595,9 +610,20 @@ class VM {
 				}
 				vmThread.events.cancel(sch);
 			}, time);
-
 			schedules[schId] = sch;
 			return schId;
+			#end
+			#if js
+			var sch:Int = null;
+			sch = js.Browser.window.setTimeout(() -> {
+				callFunction(refObject, args);
+				if (schedules.contains(sch)) {
+					schedules.remove(sch);
+				}
+			}, time);
+			schedules.push(sch);
+			return sch;
+			#end
 		} else {
 			callFunction(refObject, args);
 			return 0;
@@ -605,19 +631,32 @@ class VM {
 	}
 
 	public function isEventPending(eventId:Int) {
-		if (this.vmThread != null) {
+		if (isAsync) {
+			#if sys
 			return schedules.exists(eventId);
+			#end
+			#if js
+			return schedules.contains(eventId);
+			#end
 		} else {
 			return false;
 		}
 	}
 
 	public function cancelEvent(eventId:Int) {
-		if (this.vmThread != null) {
+		if (isAsync) {
+			#if sys
 			if (schedules.exists(eventId)) {
 				vmThread.events.cancel(schedules[eventId]);
 				schedules.remove(eventId);
 			}
+			#end
+			#if js
+			if (schedules.contains(eventId)) {
+				js.Browser.window.clearTimeout(eventId);
+				schedules.remove(eventId);
+			}
+			#end
 		}
 	}
 
@@ -626,7 +665,7 @@ class VM {
 			var func = findFunction(null, args[0]);
 
 			if (func == null) {
-				Sys.println('${args[0]}: Unknown command.');
+				Log.println('${args[0]}: Unknown command.');
 			}
 			execute(func, args);
 		} else {
@@ -643,10 +682,12 @@ class VM {
 	}
 
 	public function dispose() {
+		#if sys
 		if (this.vmThread != null) {
 			vmThread.events.runPromised(() -> {});
 			vmThread = null;
 		}
+		#end
 	}
 
 	public function execute(ns:NamespaceEntry, args:Array<String>) {
@@ -658,8 +699,8 @@ class VM {
 					return "";
 			case x:
 				if ((ns.minArgs > 0 && args.length < ns.minArgs) || (ns.maxArgs > 0 && args.length > ns.maxArgs)) {
-					Sys.println('${ns.namespace.name}::${ns.functionName} - wrong number of arguments.');
-					Sys.println('usage: ${ns.usage}');
+					Log.println('${ns.namespace.name}::${ns.functionName} - wrong number of arguments.');
+					Log.println('usage: ${ns.usage}');
 					return "";
 				}
 				switch (x) {
