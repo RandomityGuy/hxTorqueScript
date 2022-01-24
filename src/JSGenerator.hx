@@ -1,3 +1,4 @@
+import sys.io.File;
 import expr.Expr.Stmt;
 import expr.Expr.BreakStmt;
 import expr.Expr.ContinueStmt;
@@ -147,6 +148,8 @@ class JSGenerator {
 	}
 
 	public function generate() {
+		var lib = File.getContent("tscriptlib.js");
+		builder.add(lib);
 		for (stmt in stmts) {
 			stmt.visitStmt(varCollector);
 			if (varCollector.currentFunction != null) {
@@ -241,7 +244,7 @@ class JSGenerator {
 		for (i in 0...functionDeclStmt.args.length) {
 			var param = functionDeclStmt.args[i];
 			var vname = VarCollector.mangleName(param.name.literal);
-			bodyStr += println('let ${vname} = args[${i + 1}];');
+			bodyStr += println('let ${vname} = args[${i}];');
 			addedVars.push(vname);
 		}
 		if (varCollector.localVars.exists(functionDeclStmt)) {
@@ -256,7 +259,7 @@ class JSGenerator {
 		}
 		indent--;
 		declStr += bodyStr + println('}');
-		declStr += println('addConsoleFunction(${fnameStr},\'${functionDeclStmt.namespace != null ? cast(functionDeclStmt.namespace.literal, String) : ""}\', \'${functionDeclStmt.packageName != null ? cast(functionDeclStmt.packageName.literal, String) : ""}\');');
+		declStr += println('addConsoleFunction(${fnameStr},\'${functionDeclStmt.functionName.literal}\',\'${functionDeclStmt.namespace != null ? cast(functionDeclStmt.namespace.literal, String) : ""}\', \'${functionDeclStmt.packageName != null ? cast(functionDeclStmt.packageName.literal, String) : ""}\');');
 		return declStr;
 	}
 
@@ -400,21 +403,21 @@ class JSGenerator {
 						case ReqInt:
 							'global_'
 							+ VarCollector.mangleName(varExpr.name.literal)
-							+ '['
+							+ '.resolveArray('
 							+ printExpr(varExpr.arrayIndex, ReqString)
-							+ '].getIntValue()';
+							+ ').getIntValue()';
 						case ReqFloat:
 							'global_'
 							+ VarCollector.mangleName(varExpr.name.literal)
-							+ '['
+							+ '.resolveArray('
 							+ printExpr(varExpr.arrayIndex, ReqString)
-							+ '].getFloatValue()';
+							+ ').getFloatValue()';
 						case ReqString:
 							'global_'
 							+ VarCollector.mangleName(varExpr.name.literal)
-							+ '['
+							+ '.resolveArray('
 							+ printExpr(varExpr.arrayIndex, ReqString)
-							+ '].getStringValue()';
+							+ ').getStringValue()';
 						case ReqNone:
 							'global_' + VarCollector.mangleName(varExpr.name.literal) + '[' + printExpr(varExpr.arrayIndex, ReqString) + ']';
 					}
@@ -436,21 +439,24 @@ class JSGenerator {
 					return switch (type) {
 						case ReqInt:
 							VarCollector.mangleName(varExpr.name.literal)
-							+ '['
+							+ '.resolveArray('
 							+ printExpr(varExpr.arrayIndex, ReqString)
-							+ '].getIntValue()';
+							+ ').getIntValue()';
 						case ReqFloat:
 							VarCollector.mangleName(varExpr.name.literal)
-							+ '['
+							+ '.resolveArray('
 							+ printExpr(varExpr.arrayIndex, ReqString)
-							+ '].getFloatValue()';
+							+ ').getFloatValue()';
 						case ReqString:
 							VarCollector.mangleName(varExpr.name.literal)
-							+ '['
+							+ '.resolveArray('
 							+ printExpr(varExpr.arrayIndex, ReqString)
-							+ '].getStringValue()';
+							+ ').getStringValue()';
 						case ReqNone:
-							VarCollector.mangleName(varExpr.name.literal) + '[' + printExpr(varExpr.arrayIndex, ReqString) + ']';
+							VarCollector.mangleName(varExpr.name.literal)
+							+ '.resolveArray('
+							+ printExpr(varExpr.arrayIndex, ReqString)
+							+ ')';
 					}
 				}
 		}
@@ -521,18 +527,18 @@ class JSGenerator {
 					'global_' + VarCollector.mangleName(assignExpr.varExpr.name.literal) + '.';
 				} else {'global_'
 					+ VarCollector.mangleName(assignExpr.varExpr.name.literal)
-					+ '['
+					+ '.resolveArray('
 					+ printExpr(assignExpr.varExpr.arrayIndex, ReqString)
-					+ '].';
+					+ ').';
 				}
 
 			case Local:
 				if (assignExpr.varExpr.arrayIndex == null) {
 					VarCollector.mangleName(assignExpr.varExpr.name.literal) + '.';
 				} else {VarCollector.mangleName(assignExpr.varExpr.name.literal)
-					+ '['
+					+ '.resolveArray('
 					+ printExpr(assignExpr.varExpr.arrayIndex, ReqString)
-					+ '].';
+					+ ').';
 				}
 		}
 		varStr += switch (assignExpr.expr.getPrefferredType()) {
@@ -572,18 +578,18 @@ class JSGenerator {
 					'global_' + VarCollector.mangleName(assignOpExpr.varExpr.name.literal) + '.';
 				} else {'global_'
 					+ VarCollector.mangleName(assignOpExpr.varExpr.name.literal)
-					+ '['
+					+ '.resolveArray('
 					+ printExpr(assignOpExpr.varExpr.arrayIndex, ReqString)
-					+ '].';
+					+ ').';
 				}
 
 			case Local:
 				if (assignOpExpr.varExpr.arrayIndex == null) {
 					VarCollector.mangleName(assignOpExpr.varExpr.name.literal) + '.';
 				} else {VarCollector.mangleName(assignOpExpr.varExpr.name.literal)
-					+ '['
+					+ '.resolveArray('
 					+ printExpr(assignOpExpr.varExpr.arrayIndex, ReqString)
-					+ '].';
+					+ ').';
 				}
 		}
 		varStr += switch (assignOpExpr.expr.getPrefferredType()) {
@@ -645,7 +651,7 @@ class JSGenerator {
 		var objStr = printExpr(slotAccessExpr.objectExpr, ReqNone);
 		var slotStr = "." + slotAccessExpr.slotName.literal;
 		if (slotAccessExpr.arrayExpr != null) {
-			slotStr += "[" + printExpr(slotAccessExpr.arrayExpr, ReqString) + "]";
+			slotStr += ".resolveArray(" + printExpr(slotAccessExpr.arrayExpr, ReqString) + ")";
 		}
 		var retStr = objStr + slotStr;
 		retStr = switch (type) {
@@ -688,7 +694,7 @@ class JSGenerator {
 
 		var slotRetrieveStr = "." + slotAssignOpExpr.slotName.literal;
 		if (slotAssignOpExpr.arrayExpr != null) {
-			slotRetrieveStr += "[" + printExpr(slotAssignOpExpr.arrayExpr, ReqString) + "]";
+			slotRetrieveStr += ".resolveArray(" + printExpr(slotAssignOpExpr.arrayExpr, ReqString) + ")";
 		}
 		var valueStr = slotRetrieveStr + "." + switch (slotAssignOpExpr.subType) {
 			case ReqNone | ReqString:
@@ -726,7 +732,7 @@ class JSGenerator {
 				var slotdecl = objDeclExpr.slotDecls[i];
 				var slotStr:String = slotdecl.slotName.literal;
 				if (slotdecl.arrayExpr != null) {
-					slotStr += "[" + printExpr(slotdecl.arrayExpr, ReqString) + "]";
+					slotStr += ".resolveArray(" + printExpr(slotdecl.arrayExpr, ReqString) + ")";
 				}
 				slotStr += ": " + printExpr(slotdecl.expr, ReqNone);
 				retExpr += println(slotStr + (i < objDeclExpr.slotDecls.length - 1 ? "," : ""));
