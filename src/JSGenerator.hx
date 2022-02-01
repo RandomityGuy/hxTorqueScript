@@ -1,4 +1,6 @@
+#if sys
 import sys.io.File;
+#end
 import expr.Expr.Stmt;
 import expr.Expr.BreakStmt;
 import expr.Expr.ContinueStmt;
@@ -134,6 +136,10 @@ class VarCollector implements IASTVisitor {
 	}
 }
 
+#if sys
+@:build(JSGenMacro.embedLib())
+#end
+@:expose
 class JSGenerator {
 	var indent = 0;
 
@@ -143,13 +149,33 @@ class JSGenerator {
 
 	var varCollector:VarCollector = new VarCollector();
 
+	var inFunction = false;
+
+	#if js
+	static var embedLib = "__EMBED_LIB__";
+	#end
+
 	public function new(stmts:Array<Stmt>) {
 		this.stmts = stmts;
 	}
 
-	public function generate() {
-		var lib = File.getContent("tscriptlib.js");
-		builder.add(lib);
+	#if js
+	public static function bootstrapEmbed() {
+		return StringTools.replace(JSGenerator.embedLib, "__" + "EMBED_LIB" + "__", Scanner.escape(JSGenerator.embedLib)) + "\n";
+	}
+	#end
+
+	public function generate(embedLibrary:Bool = true) {
+		if (embedLibrary) {
+			#if js
+			var lib = JSGenerator.bootstrapEmbed();
+			#end
+			#if sys
+			var lib = JSGenerator.embedLib;
+			#end
+			builder.add(lib);
+			builder.add(println("const __vm = new VM();"));
+		}
 		for (stmt in stmts) {
 			stmt.visitStmt(varCollector);
 			if (varCollector.currentFunction != null) {
@@ -157,7 +183,7 @@ class JSGenerator {
 			}
 		}
 		for (global in varCollector.globalVars) {
-			builder.add('let global_${global} = new TorqueVariable();\n');
+			builder.add('const global_${global} = new Variable(\"$$global_${global}\", __vm);\n');
 		}
 
 		for (stmt in stmts) {
@@ -188,9 +214,15 @@ class JSGenerator {
 	function printReturnStmt(returnStmt:ReturnStmt) {
 		if (returnStmt.expr != null) {
 			var expr = printExpr(returnStmt.expr, ReqString);
-			return println("return " + expr + ";");
+			if (inFunction)
+				return println("return " + expr + ";");
+			else
+				return println(expr + ";");
 		} else {
-			return println("return;");
+			if (inFunction)
+				return println("return;");
+			else
+				return "";
 		}
 	}
 
@@ -218,20 +250,33 @@ class JSGenerator {
 
 	function printLoopStmt(loopStmt:LoopStmt) {
 		var ret = "";
-		if (loopStmt.init != null) {
-			ret += println(printExpr(loopStmt.init, ReqNone) + ';');
+		var isForLoop = loopStmt.init != null || loopStmt.end != null;
+		if (isForLoop) {
+			ret += println("for ("
+				+ (loopStmt.init != null ? printExpr(loopStmt.init, ReqNone) : "")
+				+ ";"
+				+ (loopStmt.condition.getPrefferredType() == ReqInt ? printExpr(loopStmt.condition, ReqInt) : printExpr(loopStmt.condition, ReqFloat))
+				+ ";"
+				+ (loopStmt.end != null ? printExpr(loopStmt.end, ReqNone) : "")
+				+ ") {");
+		} else {
+			if (loopStmt.init != null) {
+				ret += println(printExpr(loopStmt.init, ReqNone) + ';');
+			}
+			ret += println("while ("
+				+ (loopStmt.condition.getPrefferredType() == ReqInt ? printExpr(loopStmt.condition, ReqInt) : printExpr(loopStmt.condition, ReqFloat))
+				+ ") {");
 		}
-		ret += println("while ("
-			+ (loopStmt.condition.getPrefferredType() == ReqInt ? printExpr(loopStmt.condition, ReqInt) : printExpr(loopStmt.condition, ReqFloat))
-			+ ") {");
 		indent++;
 		for (stmt in loopStmt.body) {
 			ret += printStmt(stmt);
 		}
-		if (loopStmt.end != null)
-			ret += println(printExpr(loopStmt.end, ReqNone) + ';');
+		if (!isForLoop)
+			if (loopStmt.end != null)
+				ret += println(printExpr(loopStmt.end, ReqNone) + ';');
 		indent--;
 		ret += println("}");
+
 		return ret;
 	}
 
@@ -244,22 +289,24 @@ class JSGenerator {
 		for (i in 0...functionDeclStmt.args.length) {
 			var param = functionDeclStmt.args[i];
 			var vname = VarCollector.mangleName(param.name.literal);
-			bodyStr += println('let ${vname} = args[${i}];');
+			bodyStr += println('let ${vname} = args[${i + 1}];');
 			addedVars.push(vname);
 		}
 		if (varCollector.localVars.exists(functionDeclStmt)) {
 			for (localVar in varCollector.localVars[functionDeclStmt]) {
 				if (!addedVars.contains(localVar)) {
-					bodyStr += println('let ${localVar} = new TorqueVariable();');
+					bodyStr += println('const ${localVar} = new Variable(\"%${localVar}\", __vm);');
 				}
 			}
 		}
+		inFunction = true;
 		for (stmt in functionDeclStmt.stmts) {
 			bodyStr += printStmt(stmt);
 		}
+		inFunction = false;
 		indent--;
 		declStr += bodyStr + println('}');
-		declStr += println('addConsoleFunction(${fnameStr},\'${functionDeclStmt.functionName.literal}\',\'${functionDeclStmt.namespace != null ? cast(functionDeclStmt.namespace.literal, String) : ""}\', \'${functionDeclStmt.packageName != null ? cast(functionDeclStmt.packageName.literal, String) : ""}\');');
+		declStr += println('__vm.addJSFunction(${fnameStr},\'${functionDeclStmt.functionName.literal}\',\'${functionDeclStmt.namespace != null ? cast(functionDeclStmt.namespace.literal, String) : ""}\', \'${functionDeclStmt.packageName != null ? cast(functionDeclStmt.packageName.literal, String) : ""}\');');
 		return declStr;
 	}
 
@@ -510,7 +557,7 @@ class JSGenerator {
 	function printConstantExpr(constantExpr:ConstantExpr, type:TypeReq) {
 		switch (type) {
 			case ReqNone:
-				return 'resolveIdent(\'' + constantExpr.name.literal + '\')';
+				return '__vm.resolveIdent(\'' + constantExpr.name.literal + '\')';
 			case ReqInt:
 				return '${Std.int(Compiler.stringToNumber(constantExpr.name.literal))}';
 			case ReqFloat:
@@ -625,7 +672,9 @@ class JSGenerator {
 			case ParentCall:
 				"ParentCall";
 		}
-		var callStr = "callFunc("
+		if (funcCallExpr.name.literal == "eval")
+			funcCallExpr.name.literal = "eval_js"; // We change the eval function to use the version that generates js code
+		var callStr = "__vm.callFunc("
 			+ (funcCallExpr.namespace != null ? "'" + funcCallExpr.namespace.literal + "'" : '\'\'')
 			+ ", \'"
 			+ funcCallExpr.name.literal
@@ -648,12 +697,9 @@ class JSGenerator {
 	}
 
 	function printSlotAccessExpr(slotAccessExpr:SlotAccessExpr, type:TypeReq) {
-		var objStr = printExpr(slotAccessExpr.objectExpr, ReqNone);
-		var slotStr = "." + slotAccessExpr.slotName.literal;
-		if (slotAccessExpr.arrayExpr != null) {
-			slotStr += ".resolveArray(" + printExpr(slotAccessExpr.arrayExpr, ReqString) + ")";
-		}
-		var retStr = objStr + slotStr;
+		var objStr = printExpr(slotAccessExpr.objectExpr, ReqString);
+		var slotStr = '__vm.slotAccess(${objStr}, \'${slotAccessExpr.slotName.literal}\', ${slotAccessExpr.arrayExpr != null ? printExpr(slotAccessExpr.arrayExpr, ReqString) : "null"})';
+		var retStr = slotStr;
 		retStr = switch (type) {
 			case ReqNone:
 				retStr;
@@ -672,7 +718,7 @@ class JSGenerator {
 		var slotStr = "\'" + slotAssignExpr.slotName.literal + "\'";
 		var slotArrayStr = slotAssignExpr.arrayExpr != null ? printExpr(slotAssignExpr.arrayExpr, ReqString) : 'null';
 		var valueStr = printExpr(slotAssignExpr.expr, ReqString);
-		var assignStr = 'slotAssign(${objStr}, ${slotStr}, ${slotArrayStr}, ${valueStr})';
+		var assignStr = '__vm.slotAssign(${objStr}, ${slotStr}, ${slotArrayStr}, ${valueStr})';
 		assignStr = switch (type) {
 			case ReqNone:
 				assignStr;
@@ -688,14 +734,12 @@ class JSGenerator {
 
 	function printSlotAssignOpExpr(slotAssignOpExpr:SlotAssignOpExpr, type:TypeReq) {
 		slotAssignOpExpr.getAssignOpTypeOp();
+		var objAccessStr = printExpr(slotAssignOpExpr.objectExpr, ReqString);
 		var objStr = printExpr(slotAssignOpExpr.objectExpr, ReqNone);
 		var slotStr = "\'" + slotAssignOpExpr.slotName.literal + "\'";
 		var slotArrayStr = slotAssignOpExpr.arrayExpr != null ? printExpr(slotAssignOpExpr.arrayExpr, ReqString) : '';
 
-		var slotRetrieveStr = "." + slotAssignOpExpr.slotName.literal;
-		if (slotAssignOpExpr.arrayExpr != null) {
-			slotRetrieveStr += ".resolveArray(" + printExpr(slotAssignOpExpr.arrayExpr, ReqString) + ")";
-		}
+		var slotRetrieveStr = '__vm.slotAccess(${objAccessStr}, \'${slotAssignOpExpr.slotName.literal}\', ${slotAssignOpExpr.arrayExpr != null ? printExpr(slotAssignOpExpr.arrayExpr, ReqString) : "null"})';
 		var valueStr = slotRetrieveStr + "." + switch (slotAssignOpExpr.subType) {
 			case ReqNone | ReqString:
 				"getStringValue() ";
@@ -709,7 +753,7 @@ class JSGenerator {
 			+ " "
 			+ printExpr(slotAssignOpExpr.expr, slotAssignOpExpr.subType);
 
-		var assignStr = 'slotAssign(${objStr}, ${slotStr}, ${slotArrayStr}, ${valueStr})';
+		var assignStr = '__vm.slotAssign(${objStr}, ${slotStr}, ${slotArrayStr}, ${valueStr})';
 		assignStr = switch (type) {
 			case ReqNone:
 				assignStr;
@@ -723,8 +767,8 @@ class JSGenerator {
 		return assignStr;
 	}
 
-	function printObjectDeclExpr(objDeclExpr:ObjectDeclExpr, type:TypeReq) {
-		var retExpr = 'new TorqueObject(${printExpr(objDeclExpr.className, ReqString)}, ${printExpr(objDeclExpr.objectNameExpr, ReqString)}, ${objDeclExpr.structDecl}, ${objDeclExpr.parentObject != null ? "'" + objDeclExpr.parentObject.literal + "'" : null}, ';
+	function printObjectDeclExpr(objDeclExpr:ObjectDeclExpr, type:TypeReq, root:Bool = true) {
+		var retExpr = '__vm.newObject(${printExpr(objDeclExpr.className, ReqString)}, ${printExpr(objDeclExpr.objectNameExpr, ReqString)}, ${objDeclExpr.structDecl}, ${objDeclExpr.parentObject != null ? "'" + objDeclExpr.parentObject.literal + "'" : null}, ${root}, ';
 		if (objDeclExpr.slotDecls.length != 0) {
 			retExpr += "{\n";
 			indent++;
@@ -750,7 +794,7 @@ class JSGenerator {
 			indent++;
 			for (i in 0...objDeclExpr.subObjects.length) {
 				var subObj = objDeclExpr.subObjects[i];
-				retExpr += println(printExpr(subObj, ReqNone) + (i < objDeclExpr.subObjects.length - 1 ? "," : ""));
+				retExpr += println(printObjectDeclExpr(subObj, ReqNone, false) + (i < objDeclExpr.subObjects.length - 1 ? "," : ""));
 			}
 			indent--;
 			for (i in 0...indent) {
@@ -759,6 +803,16 @@ class JSGenerator {
 			retExpr += print("])");
 		} else {
 			retExpr += "[])";
+		}
+		retExpr += switch (type) {
+			case ReqNone:
+				"";
+			case ReqInt:
+				".getIntValue()";
+			case ReqFloat:
+				".getFloatValue()";
+			case ReqString:
+				".getStringValue()";
 		}
 		return retExpr;
 	}

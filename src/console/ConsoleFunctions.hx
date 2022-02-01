@@ -508,6 +508,23 @@ class ConsoleFunctions {
 		}
 	}
 
+	#if js
+	@:consoleFunction(usage = "eval_js(consoleString)", minArgs = 2, maxArgs = 2)
+	static function eval_js(vm:VM, thisObj:SimObject, args:Array<String>):String {
+		try {
+			var scanner = new Scanner(args[1]);
+			var parser = new Parser(scanner.scanTokens());
+			var stmts = parser.parse();
+			var jsgen = new JSGenerator(stmts);
+			var jsOut = jsgen.generate(false);
+			return '${js.Lib.eval(jsOut)}';
+		} catch (e) {
+			Log.println("Syntax error in input");
+			return "";
+		}
+	}
+	#end
+
 	@:consoleFunction(name = "trace", usage = "trace(bool)", minArgs = 2, maxArgs = 2)
 	static function trace_function(vm:VM, thisObj:SimObject, args:Array<String>):Void {
 		vm.traceOn = Std.parseInt(args[1]) > 0;

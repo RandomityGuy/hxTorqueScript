@@ -1,3 +1,5 @@
+package;
+
 import expr.Expr.FuncCallType;
 import console.SimSet;
 import console.SimGroup;
@@ -678,6 +680,24 @@ class CodeBlock {
 
 									case ScriptFunctionType(_, _):
 										false; // Bruh we cant reach here
+
+									case JSFunctionType(callback):
+										var vargs = [];
+										for (arg in callArgs) {
+											var v = new VM.Variable("param", this.vm);
+											v.setStringValue(arg);
+											vargs.push(v);
+										}
+										var ret = callback(vargs);
+										if (codeStream[ip] == cast OpCode.StrToUInt) {
+											ip++;
+											vm.intStack.add(cast ret);
+										} else if (codeStream[ip] == cast OpCode.StrToFlt) {
+											ip++;
+											vm.floatStack.add(cast ret);
+										} else if (codeStream[ip] == cast OpCode.StrToNone) {
+											ip++;
+										} else vm.STR.setStringValue(cast ret);
 								}
 							}
 

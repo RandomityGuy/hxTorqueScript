@@ -218,6 +218,7 @@ class StringStack {
 	}
 }
 
+@:expose
 class Variable {
 	var name:String;
 	var intValue:Int;
@@ -225,6 +226,8 @@ class Variable {
 	var stringValue:String;
 
 	var vm:VM;
+
+	var array:Map<String, Variable> = [];
 
 	var internalType:Int = -1; // -3 = int, -2 = float, -1 = string
 
@@ -308,6 +311,17 @@ class Variable {
 			floatValue = Std.parseFloat(val);
 			intValue = cast floatValue;
 			stringValue = val;
+		}
+	}
+
+	// JS
+	public function resolveArray(arrayIndex:String) {
+		if (this.array.exists(arrayIndex)) {
+			return this.array.get(arrayIndex);
+		} else {
+			var ret = new Variable(arrayIndex, vm);
+			this.array.set(arrayIndex, ret);
+			return ret;
 		}
 	}
 }
@@ -410,6 +424,7 @@ class ExprEvalState {
 	}
 }
 
+@:expose
 @:publicFields
 class VM {
 	public var namespaces:Array<Namespace> = [];
@@ -455,6 +470,9 @@ class VM {
 
 	var isAsync:Bool = false;
 
+	// For JS
+	var currentNamespace:Namespace = null;
+
 	public function new(async:Bool = false) {
 		evalState = new ExprEvalState(this);
 
@@ -494,7 +512,7 @@ class VM {
 	#end
 
 	public function findNamespace(name:String) {
-		var nsList = this.namespaces.filter(x -> x.name != null ? (x.name.toLowerCase() == name.toLowerCase()) : x.name == name);
+		var nsList = this.namespaces.filter(x -> (name != null && x.name != null) ? (x.name.toLowerCase() == name.toLowerCase()) : x.name == name);
 		if (nsList.length == 0)
 			return null;
 		return nsList[0];
@@ -580,6 +598,22 @@ class VM {
 	public function addConsoleFunction(fnName:String, fnUsage:String, minArgs:Int, maxArgs:Int, fnType:FunctionType) {
 		var emptyNamespace = namespaces[0]; // The root namespace, guaranteed
 		emptyNamespace.addFunctionFull(fnName, fnUsage, minArgs, maxArgs, fnType);
+	}
+
+	public function addJSFunction(func:Array<Variable>->String, funcName:String, namespace:String, pkg:String) {
+		if (namespace == "")
+			namespace = null;
+		if (pkg == "")
+			pkg = null;
+		var findNamespaces = findNamespace(namespace);
+		var nm:Namespace = null;
+		if (findNamespaces == null) {
+			nm = new Namespace(namespace, null, null);
+			namespaces.push(nm);
+		} else {
+			nm = findNamespaces;
+		}
+		nm.addFunctionFull(funcName, "", 0, 0, JSFunctionType(func));
 	}
 
 	public function addConsoleMethod(className:String, fnName:String, fnUsage:String, minArgs:Int, maxArgs:Int, fnType:FunctionType) {
@@ -681,6 +715,168 @@ class VM {
 		}
 	}
 
+	#if js
+	// For JS
+	public function callFunc(namespaceName:String, funcName:String, funcArgs:Array<String>, callType:String) {
+		if (callType == "FunctionCall") {
+			var func = findFunction(namespaceName == "" ? null : namespaceName, funcName);
+			if (func != null) {
+				var args = [];
+				args.push(funcName);
+				args = args.concat(funcArgs);
+				return execute(func, args);
+			} else {
+				Log.println('Cannot find function ${namespaceName}::${funcName}');
+			}
+		} else if (callType == "MethodCall") {
+			var obj = findObject(funcArgs[0]);
+			if (obj == null) {
+				Log.println('Cannot find object ${funcArgs[0]}');
+			} else {
+				var func = findFunction(obj.getClassName(), funcName);
+				if (func != null) {
+					var args = [];
+					args.push(funcName);
+					args.push('${obj.id}');
+					args = args.concat(funcArgs.slice(1));
+
+					var save = evalState.thisObject;
+					evalState.thisObject = obj;
+
+					var ret = execute(func, args);
+					evalState.thisObject = save;
+					return ret;
+				} else {
+					Log.println('Cannot find function ${obj.getClassName()}::${funcName}');
+				}
+			}
+		} else if (callType == "ParentCall") {
+			if (currentNamespace != null) {
+				if (currentNamespace.parent != null) {
+					var ns = currentNamespace.parent;
+					var func = ns.find(funcName);
+					if (func != null) {
+						var args = [];
+						if (func.namespace.name != null && func.namespace.name != "") {
+							args.push(func.namespace.name);
+						}
+						args.push(funcName);
+						args = args.concat(funcArgs);
+						return execute(func, args);
+					}
+				}
+			}
+		}
+		return "";
+	}
+
+	// For JS
+	public function newObject(className:String, name:String, isDataBlock:Bool, parentName:String, root:Bool, props:{}, children:Array<Variable>) {
+		var currentNewObject:SimObject = null;
+		if (isDataBlock) {
+			var db:SimObject = dataBlocks.get(name);
+			if (db != null) {
+				if (db.getClassName().toLowerCase() == className.toLowerCase()) {
+					Log.println('Cannot re-declare data block ${className} with a different class.');
+				}
+				currentNewObject = db;
+			}
+		}
+		if (currentNewObject == null) {
+			if (!isDataBlock) {
+				if (!ConsoleObjectConstructors.constructorMap.exists(className)) {
+					Log.println('Unable to instantantiate non con-object class ${className}');
+				}
+				currentNewObject = cast ConsoleObjectConstructors.constructorMap.get(className)();
+			} else {
+				currentNewObject = new SimDataBlock();
+				currentNewObject.className = className;
+			}
+			currentNewObject.assignId(isDataBlock ? nextDatablockId++ : nextSimId++);
+			if (parentName != null) {
+				var parent = simObjects.get(parentName);
+				if (parent != null) {
+					currentNewObject.assignFieldsFrom(parent);
+				} else {
+					Log.println('Parent object ${parentName} for ${className} does not exist.');
+				}
+			}
+			currentNewObject.name = name;
+
+			var fieldEntries = js.lib.Object.entries(props);
+			for (entry in fieldEntries) {
+				currentNewObject.setDataField(entry.key, null, entry.value);
+			}
+
+			for (child in children) {
+				var childObj = this.findObject(child.getStringValue());
+				if (Std.isOfType(currentNewObject, SimGroup) || Std.isOfType(currentNewObject, SimSet))
+					cast(currentNewObject, SimSet).addObject(childObj);
+				else {
+					rootGroup.addObject(childObj);
+				}
+			}
+
+			var added:Bool = false;
+			if (!simObjects.exists(currentNewObject.name)) {
+				added = true;
+				simObjects.set(currentNewObject.getName(), currentNewObject);
+			}
+			idMap.set(currentNewObject.id, currentNewObject);
+			currentNewObject.register(this);
+
+			var datablock:SimDataBlock = isDataBlock ? cast currentNewObject : null;
+			if (datablock != null) {
+				if (!datablock.preload()) {
+					Log.println('Datablock ${datablock.getName()} failed to preload.');
+					idMap.remove(currentNewObject.id);
+					if (added)
+						simObjects.remove(currentNewObject.getName());
+				} else {
+					dataBlocks.set(currentNewObject.getName(), datablock);
+				}
+			}
+			if (root) {
+				rootGroup.addObject(currentNewObject);
+			}
+
+			var v = new Variable('%currentNewObject', this);
+			v.setIntValue(currentNewObject.id);
+
+			return v;
+		}
+		return null;
+	}
+
+	public function resolveIdent(ident:String) {
+		var fObj = this.findObject(ident);
+		if (fObj != null) {
+			var fVar = new Variable(ident, this);
+			fVar.setStringValue(fObj.getName());
+			return fVar;
+		}
+		return null;
+	}
+	#end
+
+	public function slotAssign(obj:Variable, slotName:String, slotArrayIdx:String, valueStr:String) {
+		var simObj = this.findObject(obj.getStringValue());
+		if (simObj != null) {
+			simObj.setDataField(slotName, slotArrayIdx, valueStr);
+		}
+	}
+
+	public function slotAccess(objstr:String, slotName:String, slotArrayIdx:String) {
+		var simObj = this.findObject(objstr);
+		if (simObj != null) {
+			var val = simObj.getDataField(slotName, slotArrayIdx);
+			var v = new Variable(slotName, this);
+			v.setStringValue(val);
+			return v;
+		}
+		return null;
+	}
+
 	public function dispose() {
 		#if sys
 		if (this.vmThread != null) {
@@ -693,9 +889,13 @@ class VM {
 	public function execute(ns:NamespaceEntry, args:Array<String>) {
 		switch (ns.type) {
 			case ScriptFunctionType(functionOffset, codeBlock):
-				if (functionOffset > 0)
-					return codeBlock.exec(functionOffset, args[0], ns.namespace, args, false, ns.pkg);
-				else
+				if (functionOffset > 0) {
+					var saveNamespace = currentNamespace;
+					currentNamespace = ns.namespace;
+					var res = codeBlock.exec(functionOffset, args[0], ns.namespace, args, false, ns.pkg);
+					currentNamespace = saveNamespace;
+					return res;
+				} else
 					return "";
 			case x:
 				if ((ns.minArgs > 0 && args.length < ns.minArgs) || (ns.maxArgs > 0 && args.length > ns.maxArgs)) {
@@ -705,20 +905,49 @@ class VM {
 				}
 				switch (x) {
 					case StringCallbackType(callback):
-						return callback(this, this.evalState.thisObject, args);
-
+						var saveNamespace = currentNamespace;
+						currentNamespace = ns.namespace;
+						var res = callback(this, this.evalState.thisObject, args);
+						currentNamespace = saveNamespace;
+						return res;
 					case IntCallbackType(callback):
-						return '${callback(this, this.evalState.thisObject, args)}';
-
+						var saveNamespace = currentNamespace;
+						currentNamespace = ns.namespace;
+						var res = '${callback(this, this.evalState.thisObject, args)}';
+						currentNamespace = saveNamespace;
+						return res;
 					case FloatCallbackType(callback):
-						return '${callback(this, this.evalState.thisObject, args)}';
-
+						var saveNamespace = currentNamespace;
+						currentNamespace = ns.namespace;
+						var res = '${callback(this, this.evalState.thisObject, args)}';
+						currentNamespace = saveNamespace;
+						return res;
 					case VoidCallbackType(callback):
+						var saveNamespace = currentNamespace;
+						currentNamespace = ns.namespace;
 						callback(this, this.evalState.thisObject, args);
+						currentNamespace = saveNamespace;
 						return "";
 
 					case BoolCallbackType(callback):
-						return '${callback(this, this.evalState.thisObject, args)}';
+						var saveNamespace = currentNamespace;
+						currentNamespace = ns.namespace;
+						var res = '${callback(this, this.evalState.thisObject, args)}';
+						currentNamespace = saveNamespace;
+						return res;
+
+					case JSFunctionType(callback):
+						var saveNamespace = currentNamespace;
+						currentNamespace = ns.namespace;
+						var vargs = [];
+						for (arg in args) {
+							var v = new Variable("param", this);
+							v.setStringValue(arg);
+							vargs.push(v);
+						}
+						var res = callback(vargs);
+						currentNamespace = saveNamespace;
+						return res;
 
 					case ScriptFunctionType(functionOffset, codeBlock):
 						return ""; // It should never reach here

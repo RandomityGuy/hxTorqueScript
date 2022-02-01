@@ -6,6 +6,7 @@ import haxe.ds.GenericStack;
 import expr.Expr;
 import haxe.Exception;
 
+@:expose
 class Parser {
 	var tokens:Array<Token>;
 

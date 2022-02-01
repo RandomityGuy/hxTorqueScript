@@ -1,7 +1,10 @@
 package console;
 
+import VM.Variable;
+
 enum FunctionType {
 	ScriptFunctionType(functionOffset:Int, codeBlock:CodeBlock);
+	JSFunctionType(callback:Array<Variable>->String);
 	IntCallbackType(callback:(VM, SimObject, Array<String>) -> Int);
 	FloatCallbackType(callback:(VM, SimObject, Array<String>) -> Float);
 	StringCallbackType(callback:(VM, SimObject, Array<String>) -> String);

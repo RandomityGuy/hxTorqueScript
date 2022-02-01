@@ -1,7 +1,12 @@
 -cp src
+VM
+JSGenerator
+Disassembler
+Compiler
 
+--macro BuildMacro.build()
 --macro include("console")
---js bin/hxTorquescript.js
 --macro exclude("src/Main.hx")
+--js bin/hxTorquescript.js
 -D js-es=6
 -D shallow-expose

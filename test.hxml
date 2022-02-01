@@ -1,5 +1,6 @@
 -cp src
 --macro include("console")
 -lib buddy
+-D test
 --main Test
 -x Test

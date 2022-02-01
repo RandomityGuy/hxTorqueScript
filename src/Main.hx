@@ -1,6 +1,6 @@
+#if sys
 package;
 
-#if sys
 import haxe.EnumFlags;
 import haxe.io.Bytes;
 import haxe.io.BytesInput;

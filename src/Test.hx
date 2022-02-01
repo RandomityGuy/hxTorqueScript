@@ -1,3 +1,4 @@
+#if test
 import buddy.SingleSuite;
 import haxe.io.BytesInput;
 import sys.io.File;
@@ -558,3 +559,4 @@ class Test extends SingleSuite {
 		}
 	}
 }
+#end

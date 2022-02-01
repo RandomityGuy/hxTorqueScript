@@ -154,6 +154,7 @@ class IdentTable {
 	}
 }
 
+@:expose
 @:publicFields
 class Compiler {
 	var breakLineCount = 0;

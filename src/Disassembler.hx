@@ -54,6 +54,7 @@ typedef DisassmblyLine = {
 	var lineNo:Int;
 };
 
+@:expose
 @:publicFields
 class Disassembler {
 	var globalFloatTable:Array<Float> = [];
