@@ -10,3 +10,17 @@ Compiler
 --js bin/hxTorquescript.js
 -D js-es=6
 -D shallow-expose
+
+--next
+
+-cp src
+VM
+JSGenerator
+Disassembler
+Compiler
+
+--macro include("console")
+--macro exclude("src/Main.hx")
+--js bin/hxTorquescript.js
+-D js-es=6
+-D shallow-expose

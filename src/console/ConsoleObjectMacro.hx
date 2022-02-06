@@ -11,8 +11,6 @@ class ConsoleObjectMacro {
 		defClasses.push(Context.getLocalClass().get());
 		var fields = Context.getBuildFields();
 
-		trace('Registering ${Context.getLocalClass().get().name} class methods');
-
 		var vmInstallExprs = [];
 
 		// Console method support
@@ -50,7 +48,6 @@ class ConsoleObjectMacro {
 											$i{retType + "CallbackType"}((vm, s, arr) -> $i{field.name}(vm, cast s, arr)));
 									}
 									vmInstallExprs.push(installExpr);
-									trace('Registering console method ${Context.getLocalClass().get().name}::${fnName}');
 								case _:
 									continue;
 							}

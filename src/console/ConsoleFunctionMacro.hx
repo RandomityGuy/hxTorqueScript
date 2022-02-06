@@ -61,7 +61,6 @@ class ConsoleFunctionMacro {
 										vmObj.addConsoleFunction($v{fnName}, $v{funUsage}, $v{minArgs}, $v{maxArgs},
 											$i{retType + "CallbackType"}((vm, s, arr) -> $i{field.name}(vm, s, arr)));
 									}
-									trace('Registering console function ${fnName}');
 									vmInstallExprs.push(installExpr);
 								case _:
 									continue;

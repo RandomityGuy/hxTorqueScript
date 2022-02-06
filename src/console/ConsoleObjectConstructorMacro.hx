@@ -27,8 +27,6 @@ class ConsoleObjectConstructorMacro {
 								$i{c.name}.install(vmObj);
 							};
 
-							trace('Registering ${c.name} class constructor and namespace');
-
 							vmInstallExprs.push(installExpr);
 
 							if (c.superClass != null && c.superClass.t.get().name != "ConsoleObject") {

@@ -1,5 +1,6 @@
 package;
 
+import haxe.io.BytesBuffer;
 import expr.Expr.FuncCallType;
 import console.SimSet;
 import console.SimGroup;
@@ -13,6 +14,7 @@ import haxe.Exception;
 import haxe.io.BytesInput;
 import console.Namespace.NamespaceEntry;
 
+@:expose
 class CodeBlock {
 	var globalFloatTable:Array<Float> = [];
 	var functionFloatTable:Array<Float> = [];
@@ -56,6 +58,10 @@ class CodeBlock {
 			74 => "AdvanceStrAppendChar", 75 => "AdvanceStrComma", 76 => "AdvanceStrNul", 77 => "RewindStr", 78 => "TerminateRewindStr", 79 => "CompareStr",
 			80 => "Push", 81 => "PushFrame", 82 => "Break", 83 => "Invalid"
 		];
+	}
+
+	public function loadFromData(bytes:BytesBuffer) {
+		return load(new BytesInput(bytes.getBytes()));
 	}
 
 	public function load(inData:BytesInput) {

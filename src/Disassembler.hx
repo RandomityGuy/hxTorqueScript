@@ -1,5 +1,7 @@
 package;
 
+import haxe.io.Bytes;
+import haxe.io.BytesData;
 import haxe.EnumTools;
 import expr.OpCode;
 import haxe.display.Display.Package;
@@ -88,6 +90,10 @@ class Disassembler {
 			74 => "AdvanceStrAppendChar", 75 => "AdvanceStrComma", 76 => "AdvanceStrNul", 77 => "RewindStr", 78 => "TerminateRewindStr", 79 => "CompareStr",
 			80 => "Push", 81 => "PushFrame", 82 => "Break", 83 => "Invalid"
 		];
+	}
+
+	public function loadFromBytes(bytes:BytesData) {
+		load(new BytesInput(Bytes.ofData(bytes)));
 	}
 
 	public function load(inData:BytesInput) {

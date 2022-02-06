@@ -1,22 +1,35 @@
 package;
 
+@:expose
 class Log {
 	static var savedStr = "";
 
-	public static function println(text:String) {
+	static dynamic function outputFunction(text:String, newline:Bool) {
 		#if sys
-		Sys.println(text);
+		if (newline)
+			Sys.println(text);
+		else
+			Sys.print(text);
 		#end
 		#if js
-		js.html.Console.log(savedStr + text);
+		if (newline) {
+			js.html.Console.log(savedStr + text);
+			savedStr = "";
+		} else {
+			savedStr += text;
+		}
 		#end
-		savedStr == "";
+	}
+
+	public static function println(text:String) {
+		outputFunction(text, true);
 	}
 
 	public static function print(text:String) {
-		#if sys
-		Sys.print(text);
-		#end
-		savedStr += text;
+		outputFunction(text, false);
+	}
+
+	public static function setOutputFunction(func:(String, Bool) -> Void) {
+		outputFunction = func;
 	}
 }

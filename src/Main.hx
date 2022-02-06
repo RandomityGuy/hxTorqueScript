@@ -25,7 +25,7 @@ class Main {
 
 		if (args.length == 0) {
 			Log.println("Usage: ");
-			Log.println("hxTorqueScript <path/directory> [-d] [-v[atr]] [-r] [-On] [REPL]");
+			Log.println("hxTorqueScript <path/directory> [-d] [-v[atr]] [-r] [-On] [-js] [REPL]");
 			Log.println("-d: disassemble");
 			Log.println("-v: a: args t: const tables r: const table references");
 			Log.println("-r: run dso");

@@ -12,8 +12,8 @@ Haxe 4 and the Haxe HashLink runtime is required.
 ```
 haxe build.hxml
 ```
-This build.hxml can be modified to output the source to various other languages.
-
+This build.hxml can be modified to output the source to various other languages.  
+There is also build-js.hxml which outputs a javascript library so that it can be embedded into any javascript projects.  An example of such project is found in the web folder.  
 You can also transpile it directly to C using HashLink/C and compile that.
 ```
 haxe build-c.hxml
@@ -23,7 +23,7 @@ The instructions after that are in https://gist.github.com/Yanrishatum/d69ed72e3
 # Usage
 Presuming you already have HashLink installed and you have built it:
 ```
-hl bin/main.hl <path/directory> [-d] [-v[atr]] [-r] [-On] [REPL]
+hl bin/main.hl <path/directory> [-d] [-v[atr]] [-r] [-On] [-js] [REPL]
 
 <path/directory>: The path to the file to compile to DSO, or the folder which will be recursively search for .cs/.gui TorqueScript files and compile it.
 -d: Disassemble mode, Input in the DSO file/directory and it will disassemble it into human readable DSO instructions
@@ -33,5 +33,6 @@ hl bin/main.hl <path/directory> [-d] [-v[atr]] [-r] [-On] [REPL]
     r: Enables fancy printing of constant table references
 -r: run dso file that is inputted
 -On: compile optimization level where n is a number. 0 disables all optimization.
+-js: transpile to Javascript
 REPL: Starts a REPL, do not input path/directory, use this as the first argument.
 ```
