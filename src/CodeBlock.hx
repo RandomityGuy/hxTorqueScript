@@ -418,10 +418,10 @@ class CodeBlock {
 					vm.intStack.add(cast vm.intStack.pop() >> vm.intStack.pop());
 
 				case OpCode.And:
-					vm.intStack.add(cast vm.intStack.pop() > 0 && vm.intStack.pop() > 0);
+					vm.intStack.add((vm.intStack.pop() > 0 && vm.intStack.pop() > 0) ? 1 : 0);
 
 				case OpCode.Or:
-					vm.intStack.add(cast vm.intStack.pop() > 0 || vm.intStack.pop() > 0);
+					vm.intStack.add((vm.intStack.pop() > 0 || vm.intStack.pop() > 0) ? 1 : 0);
 
 				case OpCode.Add:
 					vm.floatStack.add(vm.floatStack.pop() + vm.floatStack.pop());
@@ -732,7 +732,7 @@ class CodeBlock {
 					vm.STR.rewindTerminate();
 
 				case OpCode.CompareStr:
-					vm.intStack.add(cast vm.STR.compare());
+					vm.intStack.add(vm.STR.compare() ? 1 : 0);
 
 				case OpCode.Push:
 					vm.STR.push();
