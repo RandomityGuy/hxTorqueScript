@@ -182,27 +182,27 @@ class ConstantFoldingPass implements IOptimizerPass {
 				else if (Std.isOfType(expr.right, StringConstExpr))
 					rValue = Compiler.stringToNumber(cast(expr.right, StringConstExpr).value);
 
-				var result:Int = cast switch (expr.op.type) {
+				var result:Int = switch (expr.op.type) {
 					case TokenType.LessThan:
-						lValue < rValue;
+						lValue < rValue ? 1 : 0;
 
 					case LessThanEqual:
-						lValue <= rValue;
+						lValue <= rValue ? 1 : 0;
 
 					case GreaterThan:
-						lValue > rValue;
+						lValue > rValue ? 1 : 0;
 
 					case GreaterThanEqual:
-						lValue >= rValue;
+						lValue >= rValue ? 1 : 0;
 
 					case Equal:
-						lValue == rValue;
+						lValue == rValue ? 1 : 0;
 
 					case NotEqual:
-						lValue != rValue;
+						lValue != rValue ? 1 : 0;
 
 					default:
-						false;
+						0;
 				}
 
 				expr.optimized = true;
@@ -317,13 +317,13 @@ class ConstantFoldingPass implements IOptimizerPass {
 
 			var result = switch (expr.op.type) {
 				case TokenType.StringEquals:
-					lValue == rValue;
+					lValue == rValue ? 1 : 0;
 
 				case TokenType.StringNotEquals:
-					lValue != rValue;
+					lValue != rValue ? 1 : 0;
 
 				default:
-					false;
+					0;
 			}
 
 			expr.optimized = true;
