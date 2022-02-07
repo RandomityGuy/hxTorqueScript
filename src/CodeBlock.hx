@@ -639,7 +639,7 @@ class CodeBlock {
 								switch (x) {
 									case StringCallbackType(callback):
 										var ret = callback(vm, vm.evalState.thisObject, callArgs);
-										if (ret != vm.STR.getSTValue()) vm.STR.setStringValue(ret);
+										if (ret != vm.STR.getSTValue()) vm.STR.setStringValue(ret); else vm.STR.setLen(ret.length);
 
 									case IntCallbackType(callback):
 										var ret = callback(vm, vm.evalState.thisObject, callArgs);

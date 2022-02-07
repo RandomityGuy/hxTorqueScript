@@ -53,22 +53,22 @@ class ConsoleFunctions {
 	}
 
 	@:consoleFunction(usage = "getSimTime()", minArgs = 1, maxArgs = 1)
-	static function getSimTime(vm:VM, thisObj:SimObject, args:Array<String>):Int {
+	static function getSimTime(vm:VM, thisObj:SimObject, args:Array<String>):Float {
 		#if js
-		return cast(js.lib.Date.now() * 1000) - vm.startTime;
+		return (js.lib.Date.now() - vm.startTime);
 		#end
 		#if sys
-		return cast(Sys.time() * 1000) - vm.startTime;
+		return (Sys.time() - vm.startTime) * 1000;
 		#end
 	}
 
 	@:consoleFunction(usage = "getRealTime()", minArgs = 1, maxArgs = 1)
-	static function getRealTime(vm:VM, thisObj:SimObject, args:Array<String>):Int {
+	static function getRealTime(vm:VM, thisObj:SimObject, args:Array<String>):Float {
 		#if js
-		return cast(js.lib.Date.now() * 1000);
+		return js.lib.Date.now();
 		#end
 		#if sys
-		return cast(Sys.time() * 1000);
+		return (Sys.time() * 1000);
 		#end
 	}
 

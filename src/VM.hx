@@ -34,7 +34,7 @@ class BytesExtensions {
 	public static function getBytes(s:String) {
 		var bytes = Bytes.alloc(s.length + 1);
 		for (i in 0...s.length) {
-			bytes.set(i, s.charCodeAt(i));
+			bytes.set(i, StringTools.fastCodeAt(s, i));
 		}
 		bytes.set(s.length, 0);
 		return bytes;
@@ -71,7 +71,9 @@ class StringStack {
 
 	public function new() {
 		bufferSize = 0;
+		argBufferSize = 0;
 		buffer = Bytes.alloc(1024);
+		argBuffer = Bytes.alloc(1024);
 		numFrames = 0;
 		start = 0;
 		len = 0;
@@ -95,7 +97,7 @@ class StringStack {
 	}
 
 	function validateArgBufferSize(size:Int) {
-		if (size > bufferSize) {
+		if (size > argBufferSize) {
 			argBufferSize = size + 2048;
 			var newbuf = Bytes.alloc(argBufferSize);
 			newbuf.blit(0, argBuffer, 0, argBuffer.length);
@@ -353,7 +355,7 @@ class ExprEvalState {
 	}
 
 	public function setCurVarName(name:String) {
-		if (name.charAt(0) == "$")
+		if (globalVars.exists(name))
 			thisVariable = globalVars.get(name);
 		else if (stackVars.length > 0)
 			thisVariable = stackVars[stackVars.length - 1].get(name);
@@ -362,7 +364,7 @@ class ExprEvalState {
 	}
 
 	public function setCurVarNameCreate(name:String) {
-		if (name.charAt(0) == "$") {
+		if (StringTools.startsWith(name, "$")) {
 			if (this.globalVars.exists(name))
 				thisVariable = this.globalVars.get(name);
 			else {
@@ -466,7 +468,7 @@ class VM {
 	var schedules:Array<Int> = [];
 	#end
 
-	var startTime:Int;
+	var startTime:Float;
 
 	var isAsync:Bool = false;
 
@@ -494,10 +496,10 @@ class VM {
 		#end
 
 		#if sys
-		this.startTime = cast(Sys.time() * 1000);
+		this.startTime = Sys.time();
 		#end
 		#if js
-		this.startTime = cast(js.lib.Date.now() * 1000);
+		this.startTime = js.lib.Date.now();
 		#end
 	}
 
