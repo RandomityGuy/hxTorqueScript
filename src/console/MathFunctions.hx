@@ -173,7 +173,8 @@ class MathFunctions {
 		return {roots: roots};
 	}
 
-	@:consoleFunction(usage = "(float a, float b, float c)", minArgs = 4, maxArgs = 4)
+	@:consoleFunction(usage = "mSolveQuadratic(float a, float b, float c) - Solve a quadratic equation (2nd degree polynomial) of form a*x^2 + b*x + c = 0.",
+		minArgs = 4, maxArgs = 4)
 	static function mSolveQuadratic(vm:VM, thisObj:SimObject, args:Array<String>):String {
 		var a = Std.parseFloat(args[1]);
 		var b = Std.parseFloat(args[2]);
@@ -182,7 +183,8 @@ class MathFunctions {
 		return roots.roots.join(" ");
 	}
 
-	@:consoleFunction(usage = "(float a, float b, float c, float d)", minArgs = 5, maxArgs = 5)
+	@:consoleFunction(usage = "mSolveCubic(float a, float b, float c, float d) - Solve a cubic equation (3rd degree polynomial) of form a*x^3 + b*x^2 + c*x + d = 0.",
+		minArgs = 5, maxArgs = 5)
 	static function mSolveCubic(vm:VM, thisObj:SimObject, args:Array<String>):String {
 		var a = Std.parseFloat(args[1]);
 		var b = Std.parseFloat(args[2]);
@@ -192,7 +194,8 @@ class MathFunctions {
 		return roots.roots.join(" ");
 	}
 
-	@:consoleFunction(usage = "(float a, float b, float c, float d, float e)", minArgs = 6, maxArgs = 6)
+	@:consoleFunction(usage = "mSolveQuartic(float a, float b, float c, float d, float e) - Solve a quartic equation (4th degree polynomial) of form a*x^4 + b*x^3 + c*x^2 + d*x + e = 0.",
+		minArgs = 6, maxArgs = 6)
 	static function mSolveQuartic(vm:VM, thisObj:SimObject, args:Array<String>):String {
 		var a = Std.parseFloat(args[1]);
 		var b = Std.parseFloat(args[2]);
@@ -203,73 +206,73 @@ class MathFunctions {
 		return roots.roots.join(" ");
 	}
 
-	@:consoleFunction(usage = "(float v) Round v down to the nearest whole number.", minArgs = 2, maxArgs = 2)
+	@:consoleFunction(usage = "mFloor(float v) - Round v down to the nearest whole number.", minArgs = 2, maxArgs = 2)
 	static function mFloor(vm:VM, thisObj:SimObject, args:Array<String>):Float {
 		return Math.ffloor(Std.parseFloat(args[1]));
 	}
 
-	@:consoleFunction(usage = "(float v) Round v up to the nearest whole number.", minArgs = 2, maxArgs = 2)
+	@:consoleFunction(usage = "mCeil(float v) - Round v up to the nearest whole number.", minArgs = 2, maxArgs = 2)
 	static function mCeil(vm:VM, thisObj:SimObject, args:Array<String>):Float {
 		return Math.fceil(Std.parseFloat(args[1]));
 	}
 
-	@:consoleFunction(usage = "(float v) Returns the absolute value of the argument.", minArgs = 2, maxArgs = 2)
+	@:consoleFunction(usage = "mAbs(float v) - Returns the absolute value of the argument.", minArgs = 2, maxArgs = 2)
 	static function mAbs(vm:VM, thisObj:SimObject, args:Array<String>):Float {
 		return Math.abs(Std.parseFloat(args[1]));
 	}
 
-	@:consoleFunction(usage = "(float v) Returns the square root of the argument.", minArgs = 2, maxArgs = 2)
+	@:consoleFunction(usage = "mSqrt(float v) - Returns the square root of the argument.", minArgs = 2, maxArgs = 2)
 	static function mSqrt(vm:VM, thisObj:SimObject, args:Array<String>):Float {
 		return Math.sqrt(Std.parseFloat(args[1]));
 	}
 
-	@:consoleFunction(usage = "(float b, float p) Returns the b raised to the pth power.", minArgs = 3, maxArgs = 3)
+	@:consoleFunction(usage = "mPow(float b, float p) - Returns the b raised to the pth power.", minArgs = 3, maxArgs = 3)
 	static function mPow(vm:VM, thisObj:SimObject, args:Array<String>):Float {
 		return Math.pow(Std.parseFloat(args[1]), Std.parseFloat(args[2]));
 	}
 
-	@:consoleFunction(usage = "(float v) Returns the natural logarithm of the argument.", minArgs = 2, maxArgs = 2)
+	@:consoleFunction(usage = "mLog(float v) - Returns the natural logarithm of the argument.", minArgs = 2, maxArgs = 2)
 	static function mLog(vm:VM, thisObj:SimObject, args:Array<String>):Float {
 		return Math.log(Std.parseFloat(args[1]));
 	}
 
-	@:consoleFunction(usage = "(float th) Returns the sine of th, which is in radians.", minArgs = 2, maxArgs = 2)
+	@:consoleFunction(usage = "mSin(float th) - Returns the sine of th, which is in radians.", minArgs = 2, maxArgs = 2)
 	static function mSin(vm:VM, thisObj:SimObject, args:Array<String>):Float {
 		return Math.sin(Std.parseFloat(args[1]));
 	}
 
-	@:consoleFunction(usage = "(float th) Returns the cosine of th, which is in radians.", minArgs = 2, maxArgs = 2)
+	@:consoleFunction(usage = "mCos(float th) - Returns the cosine of th, which is in radians.", minArgs = 2, maxArgs = 2)
 	static function mCos(vm:VM, thisObj:SimObject, args:Array<String>):Float {
 		return Math.cos(Std.parseFloat(args[1]));
 	}
 
-	@:consoleFunction(usage = "(float th) Returns the tangent of th, which is in radians.", minArgs = 2, maxArgs = 2)
+	@:consoleFunction(usage = "mTan(float th) - Returns the tangent of th, which is in radians.", minArgs = 2, maxArgs = 2)
 	static function mTan(vm:VM, thisObj:SimObject, args:Array<String>):Float {
 		return Math.tan(Std.parseFloat(args[1]));
 	}
 
-	@:consoleFunction(usage = "(float th) Returns the arc-sine of th, which is in radians.", minArgs = 2, maxArgs = 2)
+	@:consoleFunction(usage = "mAsin(float th) - Returns the arc-sine of th, which is in radians.", minArgs = 2, maxArgs = 2)
 	static function mAsin(vm:VM, thisObj:SimObject, args:Array<String>):Float {
 		return Math.asin(Std.parseFloat(args[1]));
 	}
 
-	@:consoleFunction(usage = "(float th) Returns the arc-cosine of th, which is in radians.", minArgs = 2, maxArgs = 2)
+	@:consoleFunction(usage = "mAcos(float th) - Returns the arc-cosine of th, which is in radians.", minArgs = 2, maxArgs = 2)
 	static function mAcos(vm:VM, thisObj:SimObject, args:Array<String>):Float {
 		return Math.acos(Std.parseFloat(args[1]));
 	}
 
-	@:consoleFunction(usage = "(float rise, float run) Returns the slope in radians (the arc-tangent) of a line with the given rise and run.", minArgs = 3,
-		maxArgs = 3)
+	@:consoleFunction(usage = "mAtan(float rise, float run) - Returns the slope in radians (the arc-tangent) of a line with the given rise and run.",
+		minArgs = 3, maxArgs = 3)
 	static function mAtan(vm:VM, thisObj:SimObject, args:Array<String>):Float {
 		return Math.atan2(Std.parseFloat(args[1]), Std.parseFloat(args[2]));
 	}
 
-	@:consoleFunction(usage = "(float radians) Converts a measure in radians to degrees.", minArgs = 2, maxArgs = 2)
+	@:consoleFunction(usage = "mRadToDeg(float radians) - Converts a measure in radians to degrees.", minArgs = 2, maxArgs = 2)
 	static function mRadToDeg(vm:VM, thisObj:SimObject, args:Array<String>):Float {
 		return Std.parseFloat(args[1]) * 180 / Math.PI;
 	}
 
-	@:consoleFunction(usage = "(float degrees) Convert a measure in degrees to radians.", minArgs = 2, maxArgs = 2)
+	@:consoleFunction(usage = "mDegToRad(float degrees) - Convert a measure in degrees to radians.", minArgs = 2, maxArgs = 2)
 	static function mDegToRad(vm:VM, thisObj:SimObject, args:Array<String>):Float {
 		return Std.parseFloat(args[1]) * Math.PI / 180;
 	}

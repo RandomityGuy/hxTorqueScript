@@ -27,6 +27,7 @@ class ConsoleFunctionMacro {
 		var fields = Context.getBuildFields();
 
 		var vmInstallExprs = [];
+		var vmDocExprs = [];
 
 		for (field in fields) {
 			switch (field.kind) {
@@ -62,6 +63,10 @@ class ConsoleFunctionMacro {
 											$i{retType + "CallbackType"}((vm, s, arr) -> $i{field.name}(vm, s, arr)));
 									}
 									vmInstallExprs.push(installExpr);
+									var docExpr = macro {
+										docList.push({funcname: $v{fnName}, funcusage: $v{funUsage}});
+									}
+									vmDocExprs.push(docExpr);
 								case _:
 									continue;
 							}
@@ -89,7 +94,20 @@ class ConsoleFunctionMacro {
 				}
 			})
 		}
+		var docFunc:Field = {
+			name: "gatherDocs",
+			pos: Context.currentPos(),
+			access: [APublic, AStatic],
+			kind: FFun({
+				args: [],
+				expr: macro {
+					var docList:Array<{funcname:String, funcusage:String}> = [];
+					$b{vmDocExprs} return docList;
+				}
+			})
+		}
 		fields.push(insertFunc);
+		fields.push(docFunc);
 		return fields;
 	}
 }

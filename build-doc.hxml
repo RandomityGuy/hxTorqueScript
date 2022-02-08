@@ -1,0 +1,5 @@
+-cp src
+--macro include("console")
+
+--run ConsoleDoc 
+tsdocs/index-template.html

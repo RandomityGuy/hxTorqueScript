@@ -12,6 +12,10 @@ class ConsoleObjectMacro {
 		var fields = Context.getBuildFields();
 
 		var vmInstallExprs = [];
+		var vmDocExprs = [];
+
+		var className = Context.getLocalClass().get().name;
+		var parentClassName = Context.getLocalClass().get().superClass;
 
 		// Console method support
 		for (field in fields) {
@@ -48,6 +52,10 @@ class ConsoleObjectMacro {
 											$i{retType + "CallbackType"}((vm, s, arr) -> $i{field.name}(vm, cast s, arr)));
 									}
 									vmInstallExprs.push(installExpr);
+									var docExpr = macro {
+										docList.push({funcname: $v{fnName}, funcusage: $v{funUsage}});
+									}
+									vmDocExprs.push(docExpr);
 								case _:
 									continue;
 							}
@@ -76,6 +84,27 @@ class ConsoleObjectMacro {
 			})
 		}
 		fields.push(insertFunc);
+
+		var docFunc:Field = {
+			name: "gatherDocs",
+			pos: Context.currentPos(),
+			access: [APublic, AStatic],
+			kind: FFun({
+				args: [],
+				expr: macro {
+					var docList:Array<{funcname:String, funcusage:String}> = [];
+					$b{vmDocExprs} return {
+						classname: $v{className},
+						doesextends: $v{parentClassName != null},
+						extendsclass: $v{
+							parentClassName != null ? parentClassName.t.get().name : ""
+						},
+						classfuncs: docList
+					};
+				}
+			})
+		}
+		fields.push(docFunc);
 
 		if (fields.filter(x -> x.name == "getClassName").length == 0) {
 			var classNameField:Field = {

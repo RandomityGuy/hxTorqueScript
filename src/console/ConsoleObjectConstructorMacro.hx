@@ -10,6 +10,7 @@ class ConsoleObjectConstructorMacro {
 		var constructorfield = fields[0];
 		var vmInstallExprs = [];
 		var linkExprs = [];
+		var docExprs = [];
 		switch (constructorfield.kind) {
 			case FVar(TPath(p), e):
 				switch (e.expr) {
@@ -35,6 +36,11 @@ class ConsoleObjectConstructorMacro {
 								}
 								linkExprs.push(linkExpr);
 							}
+
+							var docExpr = macro {
+								doclist.push($i{c.name}.gatherDocs());
+							};
+							docExprs.push(docExpr);
 						}
 					case _:
 						false;
@@ -59,7 +65,21 @@ class ConsoleObjectConstructorMacro {
 				}
 			})
 		}
+		var docFunc:Field = {
+			name: "gatherDocs",
+			pos: Context.currentPos(),
+			access: [APublic, AStatic],
+			kind: FFun({
+				args: [],
+				expr: macro {
+					var doclist = [];
+					$b{docExprs};
+					return doclist;
+				}
+			})
+		}
 		fields.push(insertFunc);
+		fields.push(docFunc);
 		return fields;
 	}
 }

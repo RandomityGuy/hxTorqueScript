@@ -12,7 +12,11 @@ class Parser {
 
 	var current = 0;
 
+	var panicMode = false;
+
 	var positionStack:GenericStack<Int>;
+
+	var syntaxErrors:Array<SyntaxError> = [];
 
 	public function new(tokens:Array<Token>) {
 		this.tokens = tokens;
@@ -30,19 +34,37 @@ class Parser {
 			decls = decls.concat(d);
 			d = decl();
 		}
+		for (err in syntaxErrors) {
+			Log.println(err.toString());
+		}
+		if (syntaxErrors.length != 0) {
+			throw new Exception("Syntax errors while parsing");
+		}
 		return decls;
 	}
 
 	function decl():Array<Stmt> {
-		var pkfuncs = packageDecl();
-		var d:Stmt = null;
-		if (pkfuncs == null) {
-			d = functionDecl();
-			if (d == null)
-				d = stmt();
-		}
+		try {
+			var pkfuncs = packageDecl();
+			var d:Stmt = null;
+			if (pkfuncs == null) {
+				d = functionDecl();
+				if (d == null)
+					d = stmt();
+			}
 
-		return pkfuncs != null ? pkfuncs.map(x -> cast x) : [d];
+			return pkfuncs != null ? pkfuncs.map(x -> cast x) : [d];
+		} catch (err:SyntaxError) {
+			if (!panicMode) {
+				syntaxErrors.push(err);
+				panicMode = true;
+			}
+			while (!match([TokenType.Semicolon, TokenType.Eof]) && !this.isAtEnd())
+				advance();
+			advance();
+			panicMode = false;
+			return decl();
+		}
 	}
 
 	function packageDecl():Array<FunctionDeclStmt> {
@@ -56,7 +78,7 @@ class Parser {
 			var d = functionDecl();
 			d.packageName = name;
 			if (d == null)
-				throw new Exception("Expected function declaration");
+				throw new SyntaxError("Expected function declaration", tokens[current - 1]);
 			while (d != null) {
 				decls.push(d);
 				d = functionDecl();
@@ -64,7 +86,7 @@ class Parser {
 					d.packageName = name;
 			}
 
-			consume(TokenType.RBracket, "Expected '}' after package functions");
+			consumeSynchronize(TokenType.RBracket, "Expected '}' after package functions");
 			consume(TokenType.Semicolon, "Expected ';' after package block");
 
 			return decls;
@@ -95,19 +117,19 @@ class Parser {
 					advance(); // Consume the comma
 					vardecl = variable();
 					if (vardecl == null)
-						throw new Exception("Expected variable declaration");
+						throw new SyntaxError("Expected variable declaration", this.tokens[current - 1]);
 				} else {
 					vardecl = null;
 				}
 			}
 
-			consume(TokenType.RParen, "Expected ')' after function parameters");
+			consumeSynchronize(TokenType.RParen, "Expected ')' after function parameters");
 
 			consume(TokenType.LBracket, "Expected '{' before function body");
 
 			var body = statementList();
 
-			consume(TokenType.RBracket, "Expected '}' after function body");
+			consumeSynchronize(TokenType.RBracket, "Expected '}' after function body");
 
 			return new FunctionDeclStmt(fnname, parameters, body, parentname);
 		} else {
@@ -117,10 +139,22 @@ class Parser {
 
 	function statementList():Array<Stmt> {
 		var stmts = [];
-		var s = stmt();
-		while (s != null) {
-			stmts.push(s);
-			s = stmt();
+		try {
+			var s = stmt();
+			while (s != null) {
+				stmts.push(s);
+				s = stmt();
+			}
+		} catch (err:SyntaxError) {
+			if (!panicMode) {
+				syntaxErrors.push(err);
+				panicMode = true;
+			}
+			while (!match([TokenType.Semicolon, TokenType.Eof]) && !this.isAtEnd())
+				advance();
+			advance();
+			panicMode = false;
+			return stmts.concat(statementList());
 		}
 		return stmts;
 	}
@@ -150,7 +184,7 @@ class Parser {
 				case TokenType.Modulus:
 					VarType.Local;
 				default:
-					throw new Exception("Unexpected token " + typetok.type);
+					throw new SyntaxError("Unexpected token " + typetok.type, typetok);
 			};
 
 			if (match(varStart)) {
@@ -170,10 +204,10 @@ class Parser {
 					}
 				}
 
-				var retexpr = new VarExpr(new Token(TokenType.Label, varName, varName, typetok.line), null, varType);
+				var retexpr = new VarExpr(new Token(TokenType.Label, varName, varName, typetok.line, typetok.position), null, varType);
 				return retexpr;
 			} else {
-				throw new Exception("Expected variable name");
+				throw new SyntaxError("Expected variable name", tokens[current - 1]);
 			}
 			return null;
 		} else {
@@ -253,16 +287,16 @@ class Parser {
 
 			consume(TokenType.LParen, "Expected '(' after switch");
 			var expr = expression();
-			consume(TokenType.RParen, "Expected ')' after switch expression");
+			consumeSynchronize(TokenType.RParen, "Expected ')' after switch expression");
 
 			consume(TokenType.LBracket, "Expected '{' before switch body");
 
 			var cases = caseBlock();
 
 			if (cases == null)
-				throw new Exception("Expected switch cases");
+				throw new SyntaxError("Expected switch cases", tokens[current - 1]);
 
-			consume(TokenType.RBracket, "Expected '}' after switch body");
+			consumeSynchronize(TokenType.RBracket, "Expected '}' after switch body");
 
 			// TODO:
 			// Change the case OR expr to parse it as (expr || (expr || expr...)) instead of
@@ -271,21 +305,21 @@ class Parser {
 			function generateCaseCheckExpr(caseData:CaseExpr) {
 				var checkExpr:Expr = null;
 				if (isStringSwitch) {
-					checkExpr = new StrEqExpr(expr, caseData.conditions[0], new Token(TokenType.StringEquals, "$=", "$=", 0));
+					checkExpr = new StrEqExpr(expr, caseData.conditions[0], new Token(TokenType.StringEquals, "$=", "$=", 0, 0));
 					caseData.conditions.shift();
 					while (caseData.conditions.length > 0) {
 						checkExpr = new IntBinaryExpr(checkExpr,
-							new StrEqExpr(expr, caseData.conditions.shift(), new Token(TokenType.StringEquals, "$=", "$=", 0)),
-							new Token(TokenType.LogicalOr, "||", "||", 0));
+							new StrEqExpr(expr, caseData.conditions.shift(), new Token(TokenType.StringEquals, "$=", "$=", 0, 0)),
+							new Token(TokenType.LogicalOr, "||", "||", 0, 0));
 					}
 					return checkExpr;
 				} else {
-					checkExpr = new IntBinaryExpr(expr, caseData.conditions[0], new Token(TokenType.Equal, "==", "==", 0));
+					checkExpr = new IntBinaryExpr(expr, caseData.conditions[0], new Token(TokenType.Equal, "==", "==", 0, 0));
 					caseData.conditions.shift();
 					while (caseData.conditions.length > 0) {
 						checkExpr = new IntBinaryExpr(checkExpr,
-							new IntBinaryExpr(expr, caseData.conditions.shift(), new Token(TokenType.Equal, "==", "==", 0)),
-							new Token(TokenType.LogicalOr, "||", "||", 0));
+							new IntBinaryExpr(expr, caseData.conditions.shift(), new Token(TokenType.Equal, "==", "==", 0, 0)),
+							new Token(TokenType.LogicalOr, "||", "||", 0, 0));
 					}
 					return checkExpr;
 				}
@@ -376,21 +410,21 @@ class Parser {
 				advance();
 				parentName = consume(TokenType.Label, "Expected identifier after datablock name");
 			}
-			consume(TokenType.RParen, "Expected ')' after datablock name");
+			consumeSynchronize(TokenType.RParen, "Expected ')' after datablock name");
 
 			consume(TokenType.LBracket, "Expected '{' before datablock body");
 
 			var slots = [];
 			var slot = slotAssign();
 			if (slot == null)
-				throw new Exception("Expected slot assignment");
+				throw new SyntaxError("Expected slot assignment", tokens[current - 1]);
 
 			while (slot != null) {
 				slots.push(slot);
 				slot = slotAssign();
 			}
 
-			consume(TokenType.RBracket, "Expected '}' after datablock body");
+			consumeSynchronize(TokenType.RBracket, "Expected '}' after datablock body");
 			consume(TokenType.Semicolon, "Expected ';' after datablock body");
 
 			var dbdecl = new ObjectDeclExpr(new ConstantExpr(className), parentName, new ConstantExpr(name), [], slots, [], true);
@@ -411,7 +445,7 @@ class Parser {
 				arrayIdx = null;
 				var arrayExpr = expression();
 				if (arrayExpr == null) {
-					throw new Exception("Expected expression after '['");
+					throw new SyntaxError("Expected expression after '['", tokens[current - 1]);
 				}
 				while (arrayExpr != null) {
 					if (arrayIdx == null)
@@ -431,7 +465,7 @@ class Parser {
 			consume(TokenType.Assign, "Expected '=' after slot assignment");
 			var slotExpr = expression();
 			if (slotExpr == null) {
-				throw new Exception("Expected expression after '='");
+				throw new SyntaxError("Expected expression after '='", tokens[current - 1]);
 			}
 			consume(TokenType.Semicolon, "Expected ';' after slot assignment");
 			return new SlotAssignExpr(null, arrayIdx, slotName, slotExpr);
@@ -442,7 +476,7 @@ class Parser {
 
 			var slotExpr = expression();
 			if (slotExpr == null) {
-				throw new Exception("Expected expression after '='");
+				throw new SyntaxError("Expected expression after '='", tokens[current - 1]);
 			}
 			consume(TokenType.Semicolon, "Expected ';' after slot assignment");
 			return new SlotAssignExpr(null, null, slotName, slotExpr);
@@ -461,13 +495,13 @@ class Parser {
 			var condExpr = expression();
 			consume(TokenType.Semicolon, "Expected ';' after condition in for loop");
 			var iterExpr = expression();
-			consume(TokenType.RParen, "Expected ')' after iteration in for loop");
+			consumeSynchronize(TokenType.RParen, "Expected ')' after iteration in for loop");
 
 			var body = [];
 			if (match([TokenType.LBracket])) {
 				advance();
 				body = statementList();
-				consume(TokenType.RBracket, "Expected '}' after for loop body");
+				consumeSynchronize(TokenType.RBracket, "Expected '}' after for loop body");
 			} else
 				body = [stmt()];
 
@@ -483,13 +517,13 @@ class Parser {
 			advance();
 			consume(TokenType.LParen, "Expected '(' after 'while'");
 			var condExpr = expression();
-			consume(TokenType.RParen, "Expected ')' after condition in while loop");
+			consumeSynchronize(TokenType.RParen, "Expected ')' after condition in while loop");
 
 			var body = [];
 			if (match([TokenType.LBracket])) {
 				advance();
 				body = statementList();
-				consume(TokenType.RBracket, "Expected '}' after for loop body");
+				consumeSynchronize(TokenType.RBracket, "Expected '}' after for loop body");
 			} else
 				body = [stmt()];
 
@@ -505,13 +539,13 @@ class Parser {
 			advance();
 			consume(TokenType.LParen, "Expected '(' after 'if'");
 			var condExpr = expression();
-			consume(TokenType.RParen, "Expected ')' after condition in if statement");
+			consumeSynchronize(TokenType.RParen, "Expected ')' after condition in if statement");
 
 			var body = [];
 			if (match([TokenType.LBracket])) {
 				advance();
 				body = statementList();
-				consume(TokenType.RBracket, "Expected '}' after if statement body");
+				consumeSynchronize(TokenType.RBracket, "Expected '}' after if statement body");
 			} else
 				body = [stmt()];
 
@@ -523,7 +557,7 @@ class Parser {
 					elseBody = statementList();
 					if (elseBody.length == 0)
 						elseBody = null;
-					consume(TokenType.RBracket, "Expected '}' after else statement body");
+					consumeSynchronize(TokenType.RBracket, "Expected '}' after else statement body");
 				} else
 					elseBody = [stmt()];
 			}
@@ -555,7 +589,7 @@ class Parser {
 					arrAccess = null;
 					var arrExpr = expression();
 					if (arrExpr == null) {
-						throw new Exception("Expected expression after '['");
+						throw new SyntaxError("Expected expression after '['", tokens[current - 1]);
 					}
 					while (arrExpr != null) {
 						if (arrAccess == null)
@@ -604,7 +638,7 @@ class Parser {
 
 							return new FuncCallExpr(labelAccess, null, funcexprs, MethodCall);
 						} else {
-							throw new Exception("Cannot call array methods with a dot notation accessor");
+							throw new SyntaxError("Cannot call array methods with a dot notation accessor", tokens[current - 1]);
 						}
 
 					default:
@@ -619,7 +653,7 @@ class Parser {
 					arrAccess = [];
 					var arrExpr = expression();
 					if (arrExpr == null) {
-						throw new Exception("Expected expression after '['");
+						throw new SyntaxError("Expected expression after '['", tokens[current - 1]);
 					}
 					while (arrExpr != null) {
 						arrAccess.push(arrExpr);
@@ -664,7 +698,7 @@ class Parser {
 					arrAccess = [];
 					var arrExpr = expression();
 					if (arrExpr == null) {
-						throw new Exception("Expected expression after '['");
+						throw new SyntaxError("Expected expression after '['", tokens[current - 1]);
 					}
 					while (arrExpr != null) {
 						arrAccess.push(arrExpr);
@@ -741,7 +775,7 @@ class Parser {
 			if (match([TokenType.LParen])) {
 				advance();
 				classNameExpr = expression();
-				consume(TokenType.RParen, "Expected ')' after class name");
+				consumeSynchronize(TokenType.RParen, "Expected ')' after class name");
 			} else
 				classNameExpr = new ConstantExpr(consume(TokenType.Label, "Expected class name"));
 
@@ -771,7 +805,7 @@ class Parser {
 					}
 				}
 
-				consume(TokenType.RParen, "Expected ')' after object parameters");
+				consumeSynchronize(TokenType.RParen, "Expected ')' after object parameters");
 			} else {
 				advance(); // Consume the ')'
 			}
@@ -797,7 +831,7 @@ class Parser {
 						consume(TokenType.Semicolon, "Expected ';' after object declaration");
 				}
 
-				consume(TokenType.RBracket, "Expected '}'");
+				consumeSynchronize(TokenType.RBracket, "Expected '}'");
 
 				return new ObjectDeclExpr(classNameExpr, parentObj, objNameExpr, objArgs, slotAssigns, subObjects, false);
 			} else {
@@ -860,7 +894,7 @@ class Parser {
 					advance();
 					var arrExpr = expression();
 					if (arrExpr == null)
-						throw new Exception("Expected array index");
+						throw new SyntaxError("Expected array index", tokens[current - 1]);
 
 					while (arrExpr != null) {
 						if (varIdx == null)
@@ -922,7 +956,7 @@ class Parser {
 						arrAccess = null;
 						var arrExpr = expression();
 						if (arrExpr == null) {
-							throw new Exception("Expected expression after '['");
+							throw new SyntaxError("Expected expression after '['", tokens[current - 1]);
 						}
 						while (arrExpr != null) {
 							if (arrAccess == null)
@@ -974,7 +1008,7 @@ class Parser {
 
 								chExpr = new FuncCallExpr(labelAccess, null, funcexprs, MethodCall);
 							} else {
-								throw new Exception("Cannot call array methods with a dot notation accessor");
+								throw new SyntaxError("Cannot call array methods with a dot notation accessor", tokens[current - 1]);
 							}
 
 						default:
@@ -1087,7 +1121,7 @@ class Parser {
 						arrAccess = null;
 						var arrExpr = expression();
 						if (arrExpr == null) {
-							throw new Exception("Expected expression after '['");
+							throw new SyntaxError("Expected expression after '['", tokens[current - 1]);
 						}
 						while (arrExpr != null) {
 							if (arrAccess == null)
@@ -1147,7 +1181,7 @@ class Parser {
 				var op = advance(); // Consume the operator
 				var rhs = chainExpr();
 				if (rhs == null)
-					throw new Exception("Expected rhs after bitwise operator");
+					throw new SyntaxError("Expected rhs after bitwise operator", tokens[current - 1]);
 
 				rhs = op.type != TokenType.Modulus ? new FloatBinaryExpr(lhs, rhs, op) : new IntBinaryExpr(lhs, rhs, op);
 
@@ -1155,7 +1189,7 @@ class Parser {
 					var op2 = advance(); // Consume the operator
 					var rhs2 = chainExpr();
 					if (rhs2 == null)
-						throw new Exception("Expected rhs after bitwise operator");
+						throw new SyntaxError("Expected rhs after bitwise operator", tokens[current - 1]);
 
 					rhs = op.type != TokenType.Modulus ? new FloatBinaryExpr(rhs, rhs2, op2) : new IntBinaryExpr(rhs, rhs2, op2);
 				}
@@ -1188,14 +1222,14 @@ class Parser {
 				var op = advance(); // Consume the plus/minus operator
 				var rhs = factorExp();
 				if (rhs == null)
-					throw new Exception("Expected expression after plus/minus operator");
+					throw new SyntaxError("Expected expression after plus/minus operator", tokens[current - 1]);
 				rhs = new FloatBinaryExpr(lhs, rhs, op);
 
 				while (match([TokenType.Plus, TokenType.Minus])) {
 					var op2 = advance(); // Consume the plus/minus operator
 					var rhs2 = factorExp();
 					if (rhs2 == null)
-						throw new Exception("Expected expression after plus/minus operator");
+						throw new SyntaxError("Expected expression after plus/minus operator", tokens[current - 1]);
 					rhs = new FloatBinaryExpr(rhs, rhs2, op2);
 				}
 
@@ -1226,7 +1260,7 @@ class Parser {
 				var op = advance();
 				var rhs = termExp();
 				if (rhs == null)
-					throw new Exception("Expected right hand side");
+					throw new SyntaxError("Expected right hand side", tokens[current - 1]);
 
 				rhs = new IntBinaryExpr(lhs, rhs, op);
 
@@ -1234,7 +1268,7 @@ class Parser {
 					var op2 = advance();
 					var rhs2 = termExp();
 					if (rhs2 == null)
-						throw new Exception("Expected right hand side");
+						throw new SyntaxError("Expected right hand side", tokens[current - 1]);
 					rhs = new IntBinaryExpr(rhs, rhs2, op2);
 				}
 
@@ -1272,7 +1306,7 @@ class Parser {
 				var op = advance();
 				var rhs = bitshiftExp();
 				if (rhs == null)
-					throw new Exception("Expected right hand side");
+					throw new SyntaxError("Expected right hand side", tokens[current - 1]);
 				rhs = switch (op.type) {
 					case TokenType.Concat | TokenType.TabConcat | TokenType.SpaceConcat | TokenType.NewlineConcat:
 						new StrCatExpr(lhs, rhs, op);
@@ -1294,7 +1328,7 @@ class Parser {
 					var op2 = advance();
 					var rhs2 = bitshiftExp();
 					if (rhs2 == null)
-						throw new Exception("Expected right hand side");
+						throw new SyntaxError("Expected right hand side", tokens[current - 1]);
 					rhs = switch (op2.type) {
 						case TokenType.Concat | TokenType.TabConcat | TokenType.SpaceConcat | TokenType.NewlineConcat:
 							new StrCatExpr(rhs, rhs2, op2);
@@ -1337,7 +1371,7 @@ class Parser {
 				var op = advance();
 				var rhs = strOpExp();
 				if (rhs == null)
-					throw new Exception("Expected right hand side");
+					throw new SyntaxError("Expected right hand side", tokens[current - 1]);
 
 				rhs = new IntBinaryExpr(lhs, rhs, op);
 
@@ -1350,7 +1384,7 @@ class Parser {
 					var op2 = advance();
 					var rhs2 = strOpExp();
 					if (rhs2 == null)
-						throw new Exception("Expected right hand side");
+						throw new SyntaxError("Expected right hand side", tokens[current - 1]);
 					rhs = new IntBinaryExpr(rhs, rhs2, op2);
 				}
 
@@ -1382,7 +1416,7 @@ class Parser {
 				var op = advance();
 				var rhs = relationalExp();
 				if (rhs == null)
-					throw new Exception("Expected right hand side");
+					throw new SyntaxError("Expected right hand side", tokens[current - 1]);
 
 				rhs = switch (op.type) {
 					case TokenType.Equal | TokenType.NotEqual:
@@ -1396,7 +1430,7 @@ class Parser {
 					var op2 = advance();
 					var rhs2 = relationalExp();
 					if (rhs2 == null)
-						throw new Exception("Expected right hand side");
+						throw new SyntaxError("Expected right hand side", tokens[current - 1]);
 					rhs = switch (op.type) {
 						case TokenType.Equal | TokenType.NotEqual:
 							new IntBinaryExpr(rhs, rhs2, op2);
@@ -1432,7 +1466,7 @@ class Parser {
 				var op = advance(); // Consume the bitwise operator
 				var rhs = equalityExp();
 				if (rhs == null)
-					throw new Exception("Expected expression after bitwise operator");
+					throw new SyntaxError("Expected expression after bitwise operator", tokens[current - 1]);
 
 				rhs = new IntBinaryExpr(lhs, rhs, op);
 
@@ -1440,7 +1474,7 @@ class Parser {
 					var op2 = advance(); // Consume the bitwise operator
 					var rhs2 = equalityExp();
 					if (rhs2 == null)
-						throw new Exception("Expected expression after bitwise operator");
+						throw new SyntaxError("Expected expression after bitwise operator", tokens[current - 1]);
 
 					rhs = new IntBinaryExpr(rhs, rhs2, op2);
 				}
@@ -1472,7 +1506,7 @@ class Parser {
 				var op = advance(); // Consume the bitwise operator
 				var rhs = andExp();
 				if (rhs == null)
-					throw new Exception("Expected expression after bitwise operator");
+					throw new SyntaxError("Expected expression after bitwise operator", tokens[current - 1]);
 
 				rhs = new IntBinaryExpr(lhs, rhs, op);
 
@@ -1480,7 +1514,7 @@ class Parser {
 					var op2 = advance(); // Consume the bitwise operator
 					var rhs2 = andExp();
 					if (rhs2 == null)
-						throw new Exception("Expected expression after bitwise operator");
+						throw new SyntaxError("Expected expression after bitwise operator", tokens[current - 1]);
 
 					rhs = new IntBinaryExpr(rhs, rhs2, op2);
 				}
@@ -1512,7 +1546,7 @@ class Parser {
 				var op = advance(); // Consume the bitwise operator
 				var rhs = xorExp();
 				if (rhs == null)
-					throw new Exception("Expected expression after bitwise operator");
+					throw new SyntaxError("Expected expression after bitwise operator", tokens[current - 1]);
 
 				rhs = new IntBinaryExpr(lhs, rhs, op);
 
@@ -1520,7 +1554,7 @@ class Parser {
 					var op2 = advance(); // Consume the bitwise operator
 					var rhs2 = xorExp();
 					if (rhs2 == null)
-						throw new Exception("Expected expression after bitwise operator");
+						throw new SyntaxError("Expected expression after bitwise operator", tokens[current - 1]);
 
 					rhs = new IntBinaryExpr(rhs, rhs2, op2);
 				}
@@ -1552,7 +1586,7 @@ class Parser {
 				var op = advance();
 				var rhs = orExp();
 				if (rhs == null)
-					throw new Exception("Expected right hand side");
+					throw new SyntaxError("Expected right hand side", tokens[current - 1]);
 
 				rhs = new IntBinaryExpr(lhs, rhs, op);
 
@@ -1560,7 +1594,7 @@ class Parser {
 					var op2 = advance();
 					var rhs2 = orExp();
 					if (rhs2 == null)
-						throw new Exception("Expected right hand side");
+						throw new SyntaxError("Expected right hand side", tokens[current - 1]);
 					rhs = new IntBinaryExpr(rhs, rhs2, op2);
 				}
 
@@ -1591,11 +1625,11 @@ class Parser {
 
 				var trueExpr = expression();
 				if (trueExpr == null)
-					throw new Exception("Expected true expression");
+					throw new SyntaxError("Expected true expression", tokens[current - 1]);
 				consume(TokenType.Colon, "Expected : after true expression");
 				var falseExpr = expression();
 				if (falseExpr == null)
-					throw new Exception("Expected false expression");
+					throw new SyntaxError("Expected false expression", tokens[current - 1]);
 
 				if (lhsAssign) {
 					lhsExpr.expr = new ConditionalExpr(lhs, trueExpr, falseExpr);
@@ -1633,7 +1667,23 @@ class Parser {
 			advance();
 			return previous();
 		}
-		throw new Exception(message);
+		throw new SyntaxError(message, tokens[current - 1]);
+	}
+
+	function consumeSynchronize(tokenType:TokenType, message:String) {
+		if (check(tokenType)) {
+			advance();
+			return previous();
+		}
+		if (!panicMode) {
+			this.syntaxErrors.push(new SyntaxError(message, tokens[current - 1]));
+			panicMode = true;
+		}
+		while (!check(tokenType) && !isAtEnd())
+			advance();
+		advance();
+		panicMode = false; // Synchronized
+		return previous();
 	}
 
 	function match(types:Array<TokenType>) {

@@ -10,7 +10,7 @@ import sys.FileSystem;
 @:build(console.ConsoleFunctionMacro.build())
 class ConsoleFunctions {
 	// Sim Functions
-	@:consoleFunction(usage = "nameToID(object)", minArgs = 2, maxArgs = 2)
+	@:consoleFunction(usage = "nameToID(object) - Returns the id of the object", minArgs = 2, maxArgs = 2)
 	static function nameToId(vm:VM, thisObj:SimObject, args:Array<String>):Int {
 		var obj = vm.findObject(args[1]);
 		if (obj != null) {
@@ -19,7 +19,7 @@ class ConsoleFunctions {
 		return -1;
 	}
 
-	@:consoleFunction(usage = "isObject(object)", minArgs = 2, maxArgs = 2)
+	@:consoleFunction(usage = "isObject(object) - Returns whether the object exists or not", minArgs = 2, maxArgs = 2)
 	static function isObject(vm:VM, thisObj:SimObject, args:Array<String>):Bool {
 		if (args[1] == "" || args[1] == "0") {
 			return false;
@@ -31,17 +31,18 @@ class ConsoleFunctions {
 		return false;
 	}
 
-	@:consoleFunction(usage = "cancel(eventId)", minArgs = 2, maxArgs = 2)
+	@:consoleFunction(usage = "cancel(eventId) - Cancels a scheduled event", minArgs = 2, maxArgs = 2)
 	static function cancelEvent(vm:VM, thisObj:SimObject, args:Array<String>):Void {
 		vm.cancelEvent(Std.parseInt(args[1]));
 	}
 
-	@:consoleFunction(usage = "isEventPending(eventId)", minArgs = 2, maxArgs = 2)
+	@:consoleFunction(usage = "isEventPending(eventId) - Returns whether the given event is pending to be completed or not", minArgs = 2, maxArgs = 2)
 	static function isEventPending(vm:VM, thisObj:SimObject, args:Array<String>):Bool {
 		return vm.isEventPending(Std.parseInt(args[1]));
 	}
 
-	@:consoleFunction(usage = "schedule(time, refobject|0, command, <arg1...argN)", minArgs = 4, maxArgs = 0)
+	@:consoleFunction(usage = "schedule(time, refobject|0, command, <arg1...argN>) - Schedules a function or method 'command' to be run after 'time' milliseconds with optional arguments and returns the event id",
+		minArgs = 4, maxArgs = 0)
 	static function schedule(vm:VM, thisObj:SimObject, args:Array<String>):Int {
 		var timeDelta = Std.parseInt(args[1]);
 		var obj = vm.findObject(args[2]);
@@ -52,7 +53,7 @@ class ConsoleFunctions {
 		return vm.schedule(timeDelta, obj, args.slice(3));
 	}
 
-	@:consoleFunction(usage = "getSimTime()", minArgs = 1, maxArgs = 1)
+	@:consoleFunction(usage = "getSimTime() - Returns the milliseconds since the interpreter started", minArgs = 1, maxArgs = 1)
 	static function getSimTime(vm:VM, thisObj:SimObject, args:Array<String>):Float {
 		#if js
 		return (js.lib.Date.now() - vm.startTime);
@@ -62,7 +63,7 @@ class ConsoleFunctions {
 		#end
 	}
 
-	@:consoleFunction(usage = "getRealTime()", minArgs = 1, maxArgs = 1)
+	@:consoleFunction(usage = "getRealTime() - Returns the milliseconds passed since unix epoch", minArgs = 1, maxArgs = 1)
 	static function getRealTime(vm:VM, thisObj:SimObject, args:Array<String>):Float {
 		#if js
 		return js.lib.Date.now();
@@ -74,7 +75,7 @@ class ConsoleFunctions {
 
 	// String functions
 	#if sys
-	@:consoleFunction(usage = "expandFilename(filename)", minArgs = 2, maxArgs = 2)
+	@:consoleFunction(usage = "expandFilename(filename) - Returns the full path of to the file", minArgs = 2, maxArgs = 2)
 	static function expandFilename(vm:VM, thisObj:SimObject, args:Array<String>):String {
 		var path = args[1];
 		if (path.charAt(0) == "~")
@@ -84,7 +85,7 @@ class ConsoleFunctions {
 	}
 	#end
 
-	@:consoleFunction(usage = "strcmp(string one, string two)", minArgs = 3, maxArgs = 3)
+	@:consoleFunction(usage = "strcmp(string one, string two) - Compares two strings using case-sensitive comparison.", minArgs = 3, maxArgs = 3)
 	static function strcmp(vm:VM, thisObj:SimObject, args:Array<String>):Int {
 		var a = args[1];
 		var b = args[2];
@@ -103,7 +104,7 @@ class ConsoleFunctions {
 		}
 	}
 
-	@:consoleFunction(usage = "stricmp(string one, string two)", minArgs = 3, maxArgs = 3)
+	@:consoleFunction(usage = "stricmp(string one, string two) - Compares two strings using case-insensitive comparison.", minArgs = 3, maxArgs = 3)
 	static function stricmp(vm:VM, thisObj:SimObject, args:Array<String>):Int {
 		var a = args[1].toUpperCase();
 		var b = args[2].toUpperCase();
@@ -122,19 +123,21 @@ class ConsoleFunctions {
 		}
 	}
 
-	@:consoleFunction(usage = "strlen(string)", minArgs = 2, maxArgs = 2)
+	@:consoleFunction(usage = "strlen(string) - Get the length of the given string in bytes.", minArgs = 2, maxArgs = 2)
 	static function strlen(vm:VM, thisObj:SimObject, args:Array<String>):Int {
 		return args[1].length;
 	}
 
-	@:consoleFunction(usage = "strstr(string one, string two)", minArgs = 3, maxArgs = 3)
+	@:consoleFunction(usage = "strstr(string string, string substring) - Find the start of substring in the given string searching from left to right.",
+		minArgs = 3, maxArgs = 3)
 	static function strstr(vm:VM, thisObj:SimObject, args:Array<String>):Int {
 		var a = args[1];
 		var b = args[2];
 		return a.indexOf(b);
 	}
 
-	@:consoleFunction(usage = "strpos(string hay, string needle, int offset)", minArgs = 3, maxArgs = 4)
+	@:consoleFunction(usage = "strpos(string hay, string needle, int offset) - Find the start of needle in haystack searching from left to right beginning at the given offset.",
+		minArgs = 3, maxArgs = 4)
 	static function strpos(vm:VM, thisObj:SimObject, args:Array<String>):Int {
 		var a = args[1];
 		var b = args[2];
@@ -142,22 +145,23 @@ class ConsoleFunctions {
 		return a.indexOf(b, c);
 	}
 
-	@:consoleFunction(usage = "ltrim(string value)", minArgs = 2, maxArgs = 2)
+	@:consoleFunction(usage = "ltrim(string value) - Remove leading whitespace from the string.", minArgs = 2, maxArgs = 2)
 	static function ltrim(vm:VM, thisObj:SimObject, args:Array<String>):String {
 		return StringTools.ltrim(args[1]);
 	}
 
-	@:consoleFunction(usage = "rtrim(string value)", minArgs = 2, maxArgs = 2)
+	@:consoleFunction(usage = "rtrim(string value) - Remove trailing whitespace from the string.", minArgs = 2, maxArgs = 2)
 	static function rtrim(vm:VM, thisObj:SimObject, args:Array<String>):String {
 		return StringTools.rtrim(args[1]);
 	}
 
-	@:consoleFunction(usage = "trim(string value)", minArgs = 2, maxArgs = 2)
+	@:consoleFunction(usage = "trim(string value) - Remove leading and trailing whitespace from the string.", minArgs = 2, maxArgs = 2)
 	static function trim(vm:VM, thisObj:SimObject, args:Array<String>):String {
 		return StringTools.trim(args[1]);
 	}
 
-	@:consoleFunction(usage = "stripChars(string value, string chars)", minArgs = 3, maxArgs = 3)
+	@:consoleFunction(usage = "stripChars(string value, string chars) - Remove all occurrences of characters contained in chars from str.", minArgs = 3,
+		maxArgs = 3)
 	static function stripChars(vm:VM, thisObj:SimObject, args:Array<String>):String {
 		var str = args[1];
 		for (c in 0...args[2].length) {
@@ -166,17 +170,17 @@ class ConsoleFunctions {
 		return str;
 	}
 
-	@:consoleFunction(usage = "strlwr(string value)", minArgs = 2, maxArgs = 2)
+	@:consoleFunction(usage = "strlwr(string value) - Return an all lower-case version of the given string.", minArgs = 2, maxArgs = 2)
 	static function strlwr(vm:VM, thisObj:SimObject, args:Array<String>):String {
 		return args[1].toLowerCase();
 	}
 
-	@:consoleFunction(usage = "strupr(string value)", minArgs = 2, maxArgs = 2)
+	@:consoleFunction(usage = "strupr(string value) - Return an all upper-case version of the given string.", minArgs = 2, maxArgs = 2)
 	static function strupr(vm:VM, thisObj:SimObject, args:Array<String>):String {
 		return args[1].toUpperCase();
 	}
 
-	@:consoleFunction(usage = "strchr(string value, string char)", minArgs = 3, maxArgs = 3)
+	@:consoleFunction(usage = "strchr(string value, string char) - Find the first occurrence of the given character in str.", minArgs = 3, maxArgs = 3)
 	static function strchr(vm:VM, thisObj:SimObject, args:Array<String>):String {
 		var index = args[1].indexOf(args[2]);
 		if (index == -1)
@@ -184,12 +188,14 @@ class ConsoleFunctions {
 		return args[1].substr(index);
 	}
 
-	@:consoleFunction(usage = "strreplace(string source, string from, string to)", minArgs = 4, maxArgs = 4)
+	@:consoleFunction(usage = "strreplace(string source, string from, string to) - Replace all occurrences of from in source with to.", minArgs = 4,
+		maxArgs = 4)
 	static function strreplace(vm:VM, thisObj:SimObject, args:Array<String>):String {
 		return StringTools.replace(args[1], args[2], args[3]);
 	}
 
-	@:consoleFunction(usage = "getSubStr(string str, int start, int numChars)", minArgs = 4, maxArgs = 4)
+	@:consoleFunction(usage = "getSubStr(string str, int start, int numChars) - Return a substring of str starting at start and continuing either through to the end of str (if numChars is -1) or for numChars characters (except if this would exceed the actual source string length)",
+		minArgs = 4, maxArgs = 4)
 	static function getSubStr(vm:VM, thisObj:SimObject, args:Array<String>):String {
 		var s = args[1].substr(Std.parseInt(args[2]), Std.parseInt(args[3]));
 		return s != null ? s : "";
@@ -197,7 +203,8 @@ class ConsoleFunctions {
 
 	// Field manipulators
 
-	@:consoleFunction(usage = "getWord(string str, int index)", minArgs = 3, maxArgs = 3)
+	@:consoleFunction(usage = "getWord(string str, int index) - Extract the word at the given index in the whitespace-separated list in text.", minArgs = 3,
+		maxArgs = 3)
 	static function getWord(vm:VM, thisObj:SimObject, args:Array<String>):String {
 		var toks = args[1].split(" ");
 		var index = Std.parseInt(args[2]);
@@ -206,7 +213,8 @@ class ConsoleFunctions {
 		return toks[index];
 	}
 
-	@:consoleFunction(usage = "getWords(string str, int index, int endIndex = INF)", minArgs = 3, maxArgs = 4)
+	@:consoleFunction(usage = "getWords(string str, int index, int endIndex = INF) = Extract a range of words from the given startIndex onwards thru endIndex.",
+		minArgs = 3, maxArgs = 4)
 	static function getWords(vm:VM, thisObj:SimObject, args:Array<String>):String {
 		var toks = args[1].split(" ");
 		var index = Std.parseInt(args[2]);
@@ -218,7 +226,7 @@ class ConsoleFunctions {
 		return toks.slice(index, endIndex).join(" ");
 	}
 
-	@:consoleFunction(usage = "setWord(text, index, replace)", minArgs = 4, maxArgs = 4)
+	@:consoleFunction(usage = "setWord(text, index, replacement) - Replace the word in text at the given index with replacement.", minArgs = 4, maxArgs = 4)
 	static function setWord(vm:VM, thisObj:SimObject, args:Array<String>):String {
 		var toks = args[1].split(" ");
 		var index = Std.parseInt(args[2]);
@@ -228,7 +236,7 @@ class ConsoleFunctions {
 		return toks.join(" ");
 	}
 
-	@:consoleFunction(usage = "removeWord(text, index)", minArgs = 3, maxArgs = 3)
+	@:consoleFunction(usage = "removeWord(text, index) - Remove the word in text at the given index.", minArgs = 3, maxArgs = 3)
 	static function removeWord(vm:VM, thisObj:SimObject, args:Array<String>):String {
 		var toks = args[1].split(" ");
 		var index = Std.parseInt(args[2]);
@@ -238,12 +246,13 @@ class ConsoleFunctions {
 		return toks.join(" ");
 	}
 
-	@:consoleFunction(usage = "getWordCount(string str)", minArgs = 2, maxArgs = 2)
+	@:consoleFunction(usage = "getWordCount(string str) - Return the number of whitespace-separated words in text.", minArgs = 2, maxArgs = 2)
 	static function getWordCount(vm:VM, thisObj:SimObject, args:Array<String>):Int {
 		return args[1].split(" ").length;
 	}
 
-	@:consoleFunction(usage = "getField(string str, int index)", minArgs = 3, maxArgs = 3)
+	@:consoleFunction(usage = "getField(string str, int index) - Extract the field at the given index in the tab separated list in text.", minArgs = 3,
+		maxArgs = 3)
 	static function getField(vm:VM, thisObj:SimObject, args:Array<String>):String {
 		var toks = args[1].split("\t");
 		var index = Std.parseInt(args[2]);
@@ -252,7 +261,8 @@ class ConsoleFunctions {
 		return toks[index];
 	}
 
-	@:consoleFunction(usage = "getFields(string str, int index, int endIndex = INF)", minArgs = 3, maxArgs = 4)
+	@:consoleFunction(usage = "getFields(string str, int index, int endIndex = INF) - Extract a range of fields from the given startIndex onwards thru endIndex.",
+		minArgs = 3, maxArgs = 4)
 	static function getFields(vm:VM, thisObj:SimObject, args:Array<String>):String {
 		var toks = args[1].split("\t");
 		var index = Std.parseInt(args[2]);
@@ -264,7 +274,7 @@ class ConsoleFunctions {
 		return toks.slice(index, endIndex).join("\t");
 	}
 
-	@:consoleFunction(usage = "setField(text, index, replace)", minArgs = 4, maxArgs = 4)
+	@:consoleFunction(usage = "setField(text, index, replacement) - Replace the field in text at the given index with replacement.", minArgs = 4, maxArgs = 4)
 	static function setField(vm:VM, thisObj:SimObject, args:Array<String>):String {
 		var toks = args[1].split("\t");
 		var index = Std.parseInt(args[2]);
@@ -274,7 +284,7 @@ class ConsoleFunctions {
 		return toks.join("\t");
 	}
 
-	@:consoleFunction(usage = "removeField(text, index)", minArgs = 3, maxArgs = 3)
+	@:consoleFunction(usage = "removeField(text, index) - Remove the field in text at the given index.", minArgs = 3, maxArgs = 3)
 	static function removeField(vm:VM, thisObj:SimObject, args:Array<String>):String {
 		var toks = args[1].split("\t");
 		var index = Std.parseInt(args[2]);
@@ -284,12 +294,13 @@ class ConsoleFunctions {
 		return toks.join("\t");
 	}
 
-	@:consoleFunction(usage = "getFieldCount(string str)", minArgs = 2, maxArgs = 2)
+	@:consoleFunction(usage = "getFieldCount(string str) - Return the number of tab separated fields in text.", minArgs = 2, maxArgs = 2)
 	static function getFieldCount(vm:VM, thisObj:SimObject, args:Array<String>):Int {
 		return args[1].split("\t").length;
 	}
 
-	@:consoleFunction(usage = "getRecord(string str, int index)", minArgs = 3, maxArgs = 3)
+	@:consoleFunction(usage = "getRecord(string str, int index) - Extract the record at the given index in the newline-separated list in text.", minArgs = 3,
+		maxArgs = 3)
 	static function getRecord(vm:VM, thisObj:SimObject, args:Array<String>):String {
 		var toks = args[1].split("\n");
 		var index = Std.parseInt(args[2]);
@@ -298,7 +309,8 @@ class ConsoleFunctions {
 		return toks[index];
 	}
 
-	@:consoleFunction(usage = "getRecords(string str, int index, int endIndex = INF)", minArgs = 3, maxArgs = 4)
+	@:consoleFunction(usage = "getRecords(string str, int index, int endIndex = INF) - Extract a range of records from the given startIndex onwards thru endIndex.",
+		minArgs = 3, maxArgs = 4)
 	static function getRecords(vm:VM, thisObj:SimObject, args:Array<String>):String {
 		var toks = args[1].split("\n");
 		var index = Std.parseInt(args[2]);
@@ -310,7 +322,7 @@ class ConsoleFunctions {
 		return toks.slice(index, endIndex).join("\n");
 	}
 
-	@:consoleFunction(usage = "setRecord(text, index, replace)", minArgs = 4, maxArgs = 4)
+	@:consoleFunction(usage = "setRecord(text, index, replacement) - Replace the record in text at the given index with replacement.", minArgs = 4, maxArgs = 4)
 	static function setRecord(vm:VM, thisObj:SimObject, args:Array<String>):String {
 		var toks = args[1].split("\n");
 		var index = Std.parseInt(args[2]);
@@ -320,7 +332,7 @@ class ConsoleFunctions {
 		return toks.join("\n");
 	}
 
-	@:consoleFunction(usage = "removeRecord(text, index)", minArgs = 3, maxArgs = 3)
+	@:consoleFunction(usage = "removeRecord(text, index) - Remove the record in text at the given index.", minArgs = 3, maxArgs = 3)
 	static function removeRecord(vm:VM, thisObj:SimObject, args:Array<String>):String {
 		var toks = args[1].split("\n");
 		var index = Std.parseInt(args[2]);
@@ -330,12 +342,12 @@ class ConsoleFunctions {
 		return toks.join("\n");
 	}
 
-	@:consoleFunction(usage = "getRecordCount(string str)", minArgs = 2, maxArgs = 2)
+	@:consoleFunction(usage = "getRecordCount(string str) - Return the number of newline-separated records in text.", minArgs = 2, maxArgs = 2)
 	static function getRecordCount(vm:VM, thisObj:SimObject, args:Array<String>):Int {
 		return args[1].split("\n").length;
 	}
 
-	@:consoleFunction(usage = "firstWord(string str)", minArgs = 2, maxArgs = 2)
+	@:consoleFunction(usage = "firstWord(string str) - Return the first word in text.", minArgs = 2, maxArgs = 2)
 	static function firstWord(vm:VM, thisObj:SimObject, args:Array<String>):String {
 		var toks = args[1].split(" ");
 		if (toks.length == 0)
@@ -343,7 +355,7 @@ class ConsoleFunctions {
 		return toks[0];
 	}
 
-	@:consoleFunction(usage = "restWords(string str)", minArgs = 2, maxArgs = 2)
+	@:consoleFunction(usage = "restWords(string str) - Return all but the first word in text.", minArgs = 2, maxArgs = 2)
 	static function restWords(vm:VM, thisObj:SimObject, args:Array<String>):String {
 		var toks = args[1].split(" ");
 		if (toks.length == 0)
@@ -351,7 +363,7 @@ class ConsoleFunctions {
 		return toks.slice(1).join(" ");
 	}
 
-	@:consoleFunction(usage = "nextToken(str, token, delim)", minArgs = 4, maxArgs = 4)
+	@:consoleFunction(usage = "nextToken(str, token, delim) - Tokenize a string using a set of delimiting characters.", minArgs = 4, maxArgs = 4)
 	static function nextToken(vm:VM, thisObj:SimObject, args:Array<String>):String {
 		var toks = args[1].split(args[3]);
 		if (toks.length == 0)
@@ -371,7 +383,7 @@ class ConsoleFunctions {
 
 	// Tagged strings
 
-	@:consoleFunction(usage = "detag(textTagString)", minArgs = 2, maxArgs = 2)
+	@:consoleFunction(usage = "detag(textTagString) - Detag a given tagged string", minArgs = 2, maxArgs = 2)
 	static function detag(vm:VM, thisObj:SimObject, args:Array<String>):String {
 		var ccode = args[1].charCodeAt(0);
 		if (ccode == null)
@@ -386,7 +398,7 @@ class ConsoleFunctions {
 		return args[1];
 	}
 
-	@:consoleFunction(usage = "getTag(textTagString)", minArgs = 2, maxArgs = 2)
+	@:consoleFunction(usage = "getTag(textTagString) - Get the tag of a tagged string", minArgs = 2, maxArgs = 2)
 	static function getTag(vm:VM, thisObj:SimObject, args:Array<String>):String {
 		var ccode = args[1].charCodeAt(0);
 		if (ccode == null)
@@ -403,17 +415,17 @@ class ConsoleFunctions {
 
 	// Package functions
 
-	@:consoleFunction(usage = "activatePackage(package)", minArgs = 2, maxArgs = 2)
+	@:consoleFunction(usage = "activatePackage(package) - Activates an existing package.", minArgs = 2, maxArgs = 2)
 	static function activatePackage(vm:VM, thisObj:SimObject, args:Array<String>):Void {
 		vm.activatePackage(args[1]);
 	}
 
-	@:consoleFunction(usage = "deactivatePackage(package)", minArgs = 2, maxArgs = 2)
+	@:consoleFunction(usage = "deactivatePackage(package - Deactivates a previously activated package.", minArgs = 2, maxArgs = 2)
 	static function deactivatePackage(vm:VM, thisObj:SimObject, args:Array<String>):Void {
 		vm.deactivatePackage(args[1]);
 	}
 
-	@:consoleFunction(usage = "isPackage(package)", minArgs = 2, maxArgs = 2)
+	@:consoleFunction(usage = "isPackage(package) - Returns true if the package is the name of a declared package.", minArgs = 2, maxArgs = 2)
 	static function isPackage(vm:VM, thisObj:SimObject, args:Array<String>):Bool {
 		for (nm in vm.namespaces) {
 			if (nm.pkg == args[1])
@@ -424,40 +436,41 @@ class ConsoleFunctions {
 
 	// Output
 
-	@:consoleFunction(usage = "echo(value, ...)", minArgs = 2, maxArgs = 0)
+	@:consoleFunction(usage = "echo(value, ...) - Logs a message to the console.", minArgs = 2, maxArgs = 0)
 	static function echo(vm:VM, thisObj:SimObject, args:Array<String>):Void {
 		Log.println(args.slice(1).join(""));
 	}
 
-	@:consoleFunction(usage = "warn(value, ...)", minArgs = 2, maxArgs = 0)
+	@:consoleFunction(usage = "warn(value, ...) - Logs a warning message to the console.", minArgs = 2, maxArgs = 0)
 	static function warn(vm:VM, thisObj:SimObject, args:Array<String>):Void {
 		Log.println("Warning: " + args.slice(1).join(""));
 	}
 
-	@:consoleFunction(usage = "error(value, ...)", minArgs = 2, maxArgs = 0)
+	@:consoleFunction(usage = "error(value, ...) - Logs an error message to the console.", minArgs = 2, maxArgs = 0)
 	static function error(vm:VM, thisObj:SimObject, args:Array<String>):Void {
 		Log.println("Error: " + args.slice(1).join(""));
 	}
 
-	@:consoleFunction(usage = "expandEscape(text)", minArgs = 2, maxArgs = 2)
+	@:consoleFunction(usage = "expandEscape(text) - Replace all characters in text that need to be escaped for the string to be a valid string literal with their respective escape sequences.",
+		minArgs = 2, maxArgs = 2)
 	static function expandEscape(vm:VM, thisObj:SimObject, args:Array<String>):String {
 		return Scanner.escape(args[1]);
 	}
 
-	@:consoleFunction(usage = "collapseEscape(text)", minArgs = 2, maxArgs = 2)
+	@:consoleFunction(usage = "collapseEscape(text) - Replace all escape sequences in text with their respective character codes.", minArgs = 2, maxArgs = 2)
 	static function collapseEscape(vm:VM, thisObj:SimObject, args:Array<String>):String {
 		return Scanner.unescape(args[1]);
 	}
 
 	#if sys
-	@:consoleFunction(usage = "quit()", minArgs = 1, maxArgs = 1)
+	@:consoleFunction(usage = "quit() - Quit the interpreter program", minArgs = 1, maxArgs = 1)
 	static function quit(vm:VM, thisObj:SimObject, args:Array<String>):Void {
 		Sys.exit(0);
 	}
 
 	// Metascripting
 
-	@:consoleFunction(usage = "compile(fileName)", minArgs = 2, maxArgs = 2)
+	@:consoleFunction(usage = "compile(fileName) - Compile a file to bytecode.", minArgs = 2, maxArgs = 2)
 	static function compile(vm:VM, thisObj:SimObject, args:Array<String>):Bool {
 		var f = args[1];
 		if (!FileSystem.exists(f)) {
@@ -471,7 +484,7 @@ class ConsoleFunctions {
 		return true;
 	}
 
-	@:consoleFunction(usage = "exec(fileName)", minArgs = 2, maxArgs = 2)
+	@:consoleFunction(usage = "exec(fileName) - Execute the given script file.", minArgs = 2, maxArgs = 2)
 	static function exec(vm:VM, thisObj:SimObject, args:Array<String>):Bool {
 		var f = args[1];
 		if (!FileSystem.exists(f) && !FileSystem.exists(f + '.dso')) {
@@ -494,7 +507,7 @@ class ConsoleFunctions {
 	}
 	#end
 
-	@:consoleFunction(usage = "eval(consoleString)", minArgs = 2, maxArgs = 2)
+	@:consoleFunction(usage = "eval(consoleString) - Evaluates the given string", minArgs = 2, maxArgs = 2)
 	static function eval(vm:VM, thisObj:SimObject, args:Array<String>):String {
 		var compiler = new Compiler();
 		try {
@@ -525,7 +538,7 @@ class ConsoleFunctions {
 	}
 	#end
 
-	@:consoleFunction(name = "trace", usage = "trace(bool)", minArgs = 2, maxArgs = 2)
+	@:consoleFunction(name = "trace", usage = "trace(bool) - Enable or disable tracing in the script code VM.", minArgs = 2, maxArgs = 2)
 	static function trace_function(vm:VM, thisObj:SimObject, args:Array<String>):Void {
 		vm.traceOn = Std.parseInt(args[1]) > 0;
 		Log.println('Console trace is ${vm.traceOn ? "on" : "off"}.');
@@ -579,7 +592,8 @@ class ConsoleFunctions {
 		return true;
 	}
 
-	@:consoleFunction(usage = "findFirstFile(string pattern)", minArgs = 2, maxArgs = 2)
+	@:consoleFunction(usage = "findFirstFile(string pattern) - Returns the first file in the directory system matching the given pattern.", minArgs = 2,
+		maxArgs = 2)
 	static function findFirstFile(vm:VM, thisObj:SimObject, args:Array<String>):String {
 		var path = args[1];
 		if (path.charAt(0) == "~")
@@ -600,7 +614,7 @@ class ConsoleFunctions {
 		return "";
 	}
 
-	@:consoleFunction(usage = "findNextFile(string pattern)", minArgs = 2, maxArgs = 2)
+	@:consoleFunction(usage = "findNextFile(string pattern) - Returns the next file matching a search begun in findFirstFile().", minArgs = 2, maxArgs = 2)
 	static function findNextFile(vm:VM, thisObj:SimObject, args:Array<String>):String {
 		if (findFiles == null) {
 			return findFirstFile(vm, thisObj, args);
@@ -620,7 +634,8 @@ class ConsoleFunctions {
 		return "";
 	}
 
-	@:consoleFunction(usage = "getFileCount(string pattern)", minArgs = 2, maxArgs = 2)
+	@:consoleFunction(usage = "getFileCount(string pattern) - Returns the number of files in the directory tree that match the given patterns.", minArgs = 2,
+		maxArgs = 2)
 	static function getFileCount(vm:VM, thisObj:SimObject, args:Array<String>):Int {
 		var path = args[1];
 		if (path.charAt(0) == "~")
@@ -642,28 +657,28 @@ class ConsoleFunctions {
 		return count;
 	}
 
-	@:consoleFunction(usage = "isFile(fileName)", minArgs = 2, maxArgs = 2)
+	@:consoleFunction(usage = "isFile(fileName) - Determines if the specified file exists or not.", minArgs = 2, maxArgs = 2)
 	static function isFile(vm:VM, thisObj:SimObject, args:Array<String>):Bool {
 		return FileSystem.exists(args[1]);
 	}
 	#end
 
-	@:consoleFunction(usage = "fileExt(fileName)", minArgs = 2, maxArgs = 2)
+	@:consoleFunction(usage = "fileExt(fileName) - Get the extension of a file.", minArgs = 2, maxArgs = 2)
 	static function fileExt(vm:VM, thisObj:SimObject, args:Array<String>):String {
 		return Path.extension(args[1]);
 	}
 
-	@:consoleFunction(usage = "fileBase(fileName)", minArgs = 2, maxArgs = 2)
+	@:consoleFunction(usage = "fileBase(fileName) - Get the base of a file name (removes extension).", minArgs = 2, maxArgs = 2)
 	static function fileBase(vm:VM, thisObj:SimObject, args:Array<String>):String {
 		return Path.withoutExtension(Path.withoutDirectory(args[1]));
 	}
 
-	@:consoleFunction(usage = "fileName(fileName)", minArgs = 2, maxArgs = 2)
+	@:consoleFunction(usage = "fileName(fileName)- Get the file name of a file (removes extension and path).", minArgs = 2, maxArgs = 2)
 	static function fileName(vm:VM, thisObj:SimObject, args:Array<String>):String {
 		return Path.withoutDirectory(args[1]);
 	}
 
-	@:consoleFunction(usage = "filePath(fileName)", minArgs = 2, maxArgs = 2)
+	@:consoleFunction(usage = "filePath(fileName) - Get the path of a file (removes name and extension).", minArgs = 2, maxArgs = 2)
 	static function filePath(vm:VM, thisObj:SimObject, args:Array<String>):String {
 		return Path.directory(args[1]);
 	}

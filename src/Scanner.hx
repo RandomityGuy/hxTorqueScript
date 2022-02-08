@@ -173,7 +173,7 @@ class Scanner {
 
 	function addToken(type:TokenType, literal:Any = null):Void {
 		var text = source.substring(start, current);
-		tokens.push(new Token(type, text, literal, line));
+		tokens.push(new Token(type, text, literal, line, start));
 	}
 
 	function match(expected:String):Bool {

@@ -52,6 +52,9 @@
 					<button class="nav-link" id="transpile-tab" data-bs-toggle="tab" data-bs-target="#transpile"
 						type="button" role="tab">Transpiler</button>
 				</li>
+				<li class="nav-item" role="presentation">
+					<button class="nav-link" id="reference-tab" data-bs-toggle="tab" data-bs-target="#reference"
+						type="button" role="tab">Reference</button>
 				</li>
 			</ul>
 			<div class="tab-content" id="app-mode-content">
@@ -86,7 +89,7 @@
 						</div>
 						<div class="card-body p-0">
 							<div class="form-control border-0" aria-label="torquescript code"
-								style="overflow-y: auto; width: 100%; height: 30em; resize: vertical;" id="code-editor"></div>
+								style="width: 100%; height: 30em; resize: vertical;" id="code-editor"></div>
 						</div>
 					</div>
 					<div class="card">
@@ -213,6 +216,104 @@
 								</div>
 							</div>
 						</div>
+					</div>
+				</div>
+				<div class="tab-pane" id="reference" role="tabpanel">
+					<div class="container">
+						<div class="row">
+							<div class="col-2">
+								<div class="list-group" role="tablist">
+									<a class="list-group-item list-group-item-action active" data-bs-toggle="list"
+										href="#doc-con" role="tab">Console Functions</a>
+									<a class="list-group-item list-group-item-action" data-bs-toggle="list"
+										href="#doc-math" role="tab">Math
+										Functions</a>
+									<a class="list-group-item list-group-item-action disabled">Classes</a>
+									::foreach conclasses::
+									<a class="list-group-item list-group-item-action" data-bs-toggle="list"
+										href="#doc::classname::" role="tab">::classname::</a>
+									::end::
+								</div>
+							</div>
+							<div class="col-8">
+								<div class="tab-content">
+									<div class="tab-pane show active p-3" id="doc-con" role="tabpanel"
+										style="overflow-y: auto; height: 80vh">
+										<div class="vstack gap-3">
+											<h2>
+												Console Functions
+											</h2>
+											<hr />
+											::foreach confuncs::
+											<div class="card">
+												<div class="card-header">
+													::funcname::
+												</div>
+												<div class="card-body">
+													<p class="card-text">::funcusage::</p>
+												</div>
+											</div>
+											::end::
+										</div>
+									</div>
+									<div class="tab-pane p-3" id="doc-math" role="tabpanel"
+										style="overflow-y: auto; height: 80vh">
+										<div class="vstack gap-3">
+											<h2>
+												Math Functions
+											</h2>
+											<hr />
+											::foreach mathfuncs::
+											<div class="card">
+												<div class="card-header">
+													::funcname::
+												</div>
+												<div class="card-body">
+													<p class="card-text">::funcusage::</p>
+												</div>
+											</div>
+											::end::
+										</div>
+									</div>
+									::foreach conclasses::
+									<div class="tab-pane p-3" id="doc::classname::" role="tabpanel"
+										style="overflow-y: auto; height: 80vh">
+										<div class="vstack gap-3">
+											<h2>
+												::classname:: ::if doesextends:: <h5>extends ::extendsclass::</h5>
+												::end::
+											</h2>
+											<hr />
+											<h3>
+												Methods
+											</h3>
+											::foreach classfuncs::
+											<div class="card">
+												<div class="card-header">
+													::funcname::
+												</div>
+												<div class="card-body">
+													<p class="card-text">::funcusage::</p>
+												</div>
+											</div>
+											::end::
+											::if doesextends::
+											<h4>
+												Inherited Methods
+											</h4>
+											<div class="card">
+												<div class="card-body">
+													<p class="card-text">See ::extendsclass:: methods</p>
+												</div>
+											</div>
+											::end::
+										</div>
+									</div>
+									::end::
+								</div>
+							</div>
+						</div>
+
 					</div>
 				</div>
 			</div>

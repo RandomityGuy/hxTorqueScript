@@ -7,7 +7,7 @@ class SimSet extends SimObject {
 		super();
 	}
 
-	@:consoleMethod(usage = "set.listObjects()", minArgs = 2, maxArgs = 2)
+	@:consoleMethod(usage = "set.listObjects() - Dump a list of all objects contained in the set to the console.", minArgs = 2, maxArgs = 2)
 	public static function listObjects(vm:VM, thisObj:SimSet, args:Array<String>):Void {
 		for (obj in thisObj.objectList) {
 			var isSet = Std.downcast(obj, SimSet) != null;
@@ -20,7 +20,7 @@ class SimSet extends SimObject {
 		}
 	}
 
-	@:consoleMethod(usage = "set.add(obj1,...)", minArgs = 3, maxArgs = 0)
+	@:consoleMethod(usage = "set.add(obj1,...) - Add the given objects to the set.", minArgs = 3, maxArgs = 0)
 	public static function add(vm:VM, thisObj:SimSet, args:Array<String>):Void {
 		for (i in 2...args.length) {
 			var addObj:SimObject = thisObj.vm.findObject(args[i]);
@@ -31,7 +31,7 @@ class SimSet extends SimObject {
 		}
 	}
 
-	@:consoleMethod(usage = "set.remove(obj1,...)", minArgs = 3, maxArgs = 0)
+	@:consoleMethod(usage = "set.remove(obj1,...) - Remove the given objects from the set.", minArgs = 3, maxArgs = 0)
 	public static function remove(vm:VM, thisObj:SimSet, args:Array<String>):Void {
 		for (i in 2...args.length) {
 			var addObj:SimObject = thisObj.vm.findObject(args[i]);
@@ -42,18 +42,18 @@ class SimSet extends SimObject {
 		}
 	}
 
-	@:consoleMethod(usage = "set.clear()", minArgs = 2, maxArgs = 2)
+	@:consoleMethod(usage = "set.clear() - Remove all objects from the set.", minArgs = 2, maxArgs = 2)
 	public static function clear(vm:VM, thisObj:SimSet, args:Array<String>):Void {
 		for (obj in thisObj.objectList)
 			thisObj.removeObject(obj);
 	}
 
-	@:consoleMethod(usage = "set.getCount()", minArgs = 2, maxArgs = 2)
+	@:consoleMethod(usage = "set.getCount() - Get the number of objects contained in the set.", minArgs = 2, maxArgs = 2)
 	public static function getCount(vm:VM, thisObj:SimSet, args:Array<String>):Int {
 		return thisObj.objectList.length;
 	}
 
-	@:consoleMethod(usage = "set.getObject(objIndex)", minArgs = 3, maxArgs = 3)
+	@:consoleMethod(usage = "set.getObject(objIndex) - Get the object at the given index.", minArgs = 3, maxArgs = 3)
 	public static function getObject(vm:VM, thisObj:SimSet, args:Array<String>):Int {
 		var index = Std.parseInt(args[2]);
 		if (index < 0 || index >= thisObj.objectList.length) {
@@ -63,7 +63,7 @@ class SimSet extends SimObject {
 		return thisObj.objectList[index].id;
 	}
 
-	@:consoleMethod(usage = "set.isMember(object)", minArgs = 3, maxArgs = 3)
+	@:consoleMethod(usage = "set.isMember(object) - Test whether the given object belongs to the set.", minArgs = 3, maxArgs = 3)
 	public static function isMember(vm:VM, thisObj:SimSet, args:Array<String>):Bool {
 		var findObj = thisObj.vm.findObject(args[2]);
 		if (findObj == null) {
@@ -83,7 +83,7 @@ class SimSet extends SimObject {
 		thisObj.objectList.insert(0, findObj);
 	}
 
-	@:consoleMethod(usage = "set.pushToBack(object)", minArgs = 3, maxArgs = 3)
+	@:consoleMethod(usage = "set.pushToBack(object) - Make the given object the last object in the set.", minArgs = 3, maxArgs = 3)
 	public static function pushToBack(vm:VM, thisObj:SimSet, args:Array<String>):Void {
 		var findObj = thisObj.vm.findObject(args[2]);
 		if (findObj == null) {
