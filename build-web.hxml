@@ -1,12 +1,4 @@
 -cp src
---macro include("console")
-
---run ConsoleDoc 
-web/index-template.html
-
---next
-
--cp src
 VM
 JSGenerator
 Disassembler
@@ -18,3 +10,11 @@ Compiler
 --js web/scripts/hxTorquescript.js
 -D js-es=6
 -D shallow-expose
+
+--next
+
+-cp src
+--macro include("console")
+
+--run ConsoleDoc 
+web/index-template.html
