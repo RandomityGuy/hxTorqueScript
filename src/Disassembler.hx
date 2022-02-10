@@ -488,7 +488,7 @@ class Disassembler {
 				str = new StringBuf();
 				zeroCount++;
 			} else {
-				str.add(globalStringTable.charAt(i));
+				str.add(functionStringTable.charAt(i));
 			}
 		}
 
