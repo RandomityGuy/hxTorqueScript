@@ -14,6 +14,8 @@ class Main {
 
 	static var disasmVerbosity:haxe.EnumFlags<Disassembler.DisassemblyVerbosity> = new EnumFlags<Disassembler.DisassemblyVerbosity>();
 
+	static var startTime:Float;
+
 	static public function main():Void {
 		var args = Sys.args();
 		var oLevel = 3;
@@ -92,7 +94,7 @@ class Main {
 						}
 					}
 				}
-
+				startTime = Sys.time();
 				if (FileSystem.isDirectory(path)) {
 					if (isTranspile)
 						transpileDirectory(path);
@@ -117,7 +119,7 @@ class Main {
 		// disasmDirectory("tests");
 		// parseDirectory("mb");
 		// parseDirectory("D:/Marbleblast/PQ-src/Build/Cache/PQ/Marble Blast Platinum");
-		trace('Ran actions on ${successFiles} files out of ${successFiles + failedFiles} files');
+		trace('Ran actions on ${successFiles} files out of ${successFiles + failedFiles} files in ${Sys.time() - startTime} seconds');
 
 		// var f = File.getContent("mb/marble/client/scripts/client.cs");
 		// var compiler = new Compiler();
@@ -142,7 +144,7 @@ class Main {
 					var compiler = new Compiler();
 					var bytesB = compiler.compile(f, optimizeLevel);
 					File.saveBytes(path + '/' + file + '.dso', bytesB.getBytes());
-					trace('Compiled ${path}/${file}');
+					// trace('Compiled ${path}/${file}');
 					successFiles++;
 					// } catch (e) {
 					// 	trace('Failed compiling ${file}');

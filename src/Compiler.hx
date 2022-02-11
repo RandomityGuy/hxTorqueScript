@@ -38,25 +38,13 @@ class StringTable {
 
 	public var entries:Array<StringTableEntry> = [];
 
-	public var indexToEntryMap:Map<Int, String> = [];
+	public var stringToIndex:Map<String, Int> = [];
 
 	public function new() {}
 
 	public function add(str:String, caseSens:Bool, tag:Bool) {
-		for (e in entries) {
-			if (e.tag != tag)
-				continue;
-
-			if (str == "" && e.string == "") // Because fuck it, apparently this bugs out otherwise.
-				return e.start;
-			else {
-				if (!caseSens) {
-					if (str.toLowerCase() == e.string.toLowerCase())
-						return e.start;
-				} else if (str == e.string)
-					return e.start;
-			}
-		}
+		if (stringToIndex.exists(caseSens ? str.toLowerCase() : str))
+			return stringToIndex.get(caseSens ? str.toLowerCase() : str);
 
 		var len = str.length + 1;
 		if (tag && len < 7) {
@@ -69,7 +57,7 @@ class StringTable {
 
 		totalLen += len;
 
-		indexToEntryMap.set(addEntry.start, str);
+		stringToIndex.set(caseSens ? str.toLowerCase() : str, addEntry.start);
 
 		return addEntry.start;
 	}

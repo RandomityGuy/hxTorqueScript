@@ -39,45 +39,45 @@ class Scanner {
 	function scanToken():Void {
 		var c = advance();
 		switch (c) {
-			case '(':
+			case '('.code:
 				addToken(TokenType.LParen);
-			case ':':
+			case ':'.code:
 				addToken(match(':') ? TokenType.DoubleColon : TokenType.Colon);
-			case ')':
+			case ')'.code:
 				addToken(TokenType.RParen);
-			case '{':
+			case '{'.code:
 				addToken(TokenType.LBracket);
-			case '}':
+			case '}'.code:
 				addToken(TokenType.RBracket);
-			case ',':
+			case ','.code:
 				addToken(TokenType.Comma);
-			case '.':
+			case '.'.code:
 				addToken(TokenType.Dot);
-			case ';':
+			case ';'.code:
 				addToken(TokenType.Semicolon);
-			case '[':
+			case '['.code:
 				addToken(TokenType.LeftSquareBracket);
-			case ']':
+			case ']'.code:
 				addToken(TokenType.RightSquareBracket);
-			case '$':
+			case '$'.code:
 				addToken(match('=') ? TokenType.StringEquals : TokenType.Dollar);
-			case '?':
+			case '?'.code:
 				addToken(TokenType.QuestionMark);
-			case '+':
+			case '+'.code:
 				addToken(match('=') ? TokenType.PlusAssign : match('+') ? TokenType.PlusPlus : TokenType.Plus);
-			case '-':
+			case '-'.code:
 				addToken(match('=') ? TokenType.MinusAssign : match('-') ? TokenType.MinusMinus : TokenType.Minus);
-			case '*':
+			case '*'.code:
 				addToken(match('=') ? TokenType.MultiplyAssign : TokenType.Multiply);
-			case '/':
+			case '/'.code:
 				if (match('/')) {
 					// A comment goes until the end of the line.
-					while (peek() != '\n' && !isAtEnd()) {
+					while (peek() != '\n'.code && !isAtEnd()) {
 						advance();
 					}
 				} else if (match('*')) {
 					// A comment goes until "*/".
-					while (peek() != '*' || peekNext() != '/') {
+					while (peek() != '*'.code || peekNext() != '/'.code) {
 						if (isAtEnd()) {
 							trace("Unterminated comment.");
 						}
@@ -87,19 +87,19 @@ class Scanner {
 					advance(); // Consume the "*".
 				} else
 					addToken(match('=') ? TokenType.DivideAssign : TokenType.Divide);
-			case '%':
+			case '%'.code:
 				addToken(match('=') ? TokenType.ModulusAssign : TokenType.Modulus);
-			case '@':
+			case '@'.code:
 				addToken(TokenType.Concat);
-			case "&":
+			case "&".code:
 				addToken(match('=') ? TokenType.AndAssign : match('&') ? TokenType.LogicalAnd : TokenType.BitwiseAnd);
-			case "|":
+			case "|".code:
 				addToken(match('=') ? TokenType.OrAssign : match('|') ? TokenType.LogicalOr : TokenType.BitwiseOr);
-			case "^":
+			case "^".code:
 				addToken(match('=') ? TokenType.XorAssign : TokenType.BitwiseXor);
-			case "~":
+			case "~".code:
 				addToken(TokenType.Tilde);
-			case "!":
+			case "!".code:
 				if (match('=')) {
 					addToken(TokenType.NotEqual);
 				} else if (match('$')) {
@@ -112,33 +112,33 @@ class Scanner {
 				} else {
 					addToken(TokenType.Not);
 				}
-			case '=':
+			case '='.code:
 				addToken(match('=') ? TokenType.Equal : TokenType.Assign);
-			case '<':
+			case '<'.code:
 				addToken(match('=') ? TokenType.LessThanEqual : match('<') ? match('=') ? TokenType.ShiftLeftAssign : TokenType.LeftBitShift : TokenType.LessThan);
-			case '>':
+			case '>'.code:
 				addToken(match('=') ? TokenType.GreaterThanEqual : match('>') ? match('=') ? TokenType.ShiftRightAssign : TokenType.RightBitShift : TokenType.GreaterThan);
 
-			case '"':
-				string('"', TokenType.String);
+			case '"'.code:
+				string('"'.code, TokenType.String);
 
-			case '\'':
-				string('\'', TokenType.TaggedString);
+			case '\''.code:
+				string('\''.code, TokenType.TaggedString);
 
-			case '0':
+			case '0'.code:
 				if (match('x')) {
 					hexNumber();
 				} else
 					number();
 
-			case '1', '2', '3', '4', '5', '6', '7', '8', '9':
+			case x if ('1'.code <= x && x <= '9'.code):
 				number();
 
-			case " ", "\r", "\t":
+			case " ".code, "\r".code, "\t".code:
 				// Ignore whitespace.
 				var a = 1; // Bruh
 
-			case '\n':
+			case '\n'.code:
 				line++;
 
 			default:
@@ -149,8 +149,8 @@ class Scanner {
 		}
 	}
 
-	function advance():String {
-		return source.charAt(current++);
+	function advance():Int {
+		return StringTools.fastCodeAt(source, current++);
 	}
 
 	function peekPrev():String {
@@ -165,10 +165,10 @@ class Scanner {
 		return source.charAt(current - 2);
 	}
 
-	function peek():String {
+	function peek():Int {
 		if (isAtEnd())
-			return String.fromCharCode(0);
-		return source.charAt(current);
+			return 0;
+		return StringTools.fastCodeAt(source, current);
 	}
 
 	function addToken(type:TokenType, literal:Any = null):Void {
@@ -186,14 +186,14 @@ class Scanner {
 		return true;
 	}
 
-	function string(delimiter:String, tokenType:TokenType) {
+	function string(delimiter:Int, tokenType:TokenType) {
 		var doingEscapeSequence = false;
 
 		while (peek() != delimiter && !isAtEnd() || doingEscapeSequence) {
-			if (peek() == '\n')
+			if (peek() == '\n'.code)
 				line++;
 			if (!doingEscapeSequence) {
-				if (peek() == '\\') {
+				if (peek() == '\\'.code) {
 					doingEscapeSequence = true;
 				}
 			} else {
@@ -217,19 +217,29 @@ class Scanner {
 	}
 
 	public static function unescape(s:String) {
-		var escapeMap = [
-			"\\t" => "\t", "\\n" => "\n", "\\r" => "\r", "\\\"" => "\"", "\\'" => "'", "\\\\" => "\\", "\\c0" => "\x01", "\\c1" => "\x02", "\\c2" => "\x03",
-			"\\c3" => "\x04", "\\c4" => "\x05", "\\c5" => "\x06", "\\c6" => "\x07", "\\c7" => "\x0B", "\\c8" => "\x0C", "\\c9" => "\x0E", "\\cr" => '\x0F',
-			"\\cp" => "\x10", "\\co" => "\x11"
+		// var escapeMap = [
+		// 	"\\t" => "\t", "\\n" => "\n", "\\r" => "\r", "\\\"" => "\"", "\\'" => "'", "\\\\" => "\\", "\\c0" => "\x01", "\\c1" => "\x02", "\\c2" => "\x03",
+		// 	"\\c3" => "\x04", "\\c4" => "\x05", "\\c5" => "\x06", "\\c6" => "\x07", "\\c7" => "\x0B", "\\c8" => "\x0C", "\\c9" => "\x0E", "\\cr" => '\x0F',
+		// 	"\\cp" => "\x10", "\\co" => "\x11"
+		// ];
+		var escapeFrom = [
+			"\\t", "\\n", "\\r", "\\\"", "\\'", "\\\\", "\\c0", "\\c1", "\\c2", "\\c3", "\\c4", "\\c5", "\\c6", "\\c7", "\\c8", "\\c9", "\\cr", "\\cp", "\\co"
 		];
-		for (o => esc in escapeMap) {
-			s = StringTools.replace(s, o, esc);
+		var escapeTo = [
+			"\t", "\n", "\r", "\"", "'", "\\", "\x01", "\x02", "\x03", "\x04", "\x05", "\x06", "\x07", "\x0B", "\x0C", "\x0E", "\x0F", "\x10", "\x11"
+		];
+		for (i in 0...escapeFrom.length) {
+			if (StringTools.contains(s, escapeFrom[i])) {
+				s = StringTools.replace(s, escapeFrom[i], escapeTo[i]);
+			}
 		}
 		if (s.charCodeAt(0) == 0x1) {
 			s = "\x02" + s;
 		}
 		var newStr = s;
 		while (newStr.indexOf("\\x") != -1) {
+			if (newStr.indexOf("\\x") == newStr.length - 2)
+				break;
 			var hexString = newStr.substring(newStr.indexOf("\\x") + 2, newStr.indexOf("\\x") + 4);
 			var intValue = Std.parseInt("0x" + hexString);
 			newStr = newStr.substring(0, newStr.indexOf("\\x")) + String.fromCharCode(intValue) + newStr.substring(newStr.indexOf("\\x") + 4);
@@ -239,13 +249,13 @@ class Scanner {
 	}
 
 	public static function escape(s:String) {
-		var escapeMap = [
-			"\t" => "\\t", "\n" => "\\n", "\r" => "\\r", "\"" => "\\\"", "'" => "\\'", "\\" => "\\\\", "\x01" => "\\c0", "\x02" => "\\c1", "\x03" => "\\c2",
-			"\x04" => "\\c3", "\x05" => "\\c4", "\x06" => "\\c5", "\x07" => "\\c6", "\x0B" => "\\c7", "\x0C" => "\\c8", "\x0E" => "\\c9", "\x0F" => "\\cr",
-			"\x10" => "\\cp", "\x11" => "\\co", "\x08" => "\\x08", "\x12" => "\\x12", "\x13" => "\\x13", "\x14" => "\\x14", "\x15" => "\\x15",
-			"\x16" => "\\x16", "\x17" => "\\x17", "\x18" => "\\x18", "\x19" => "\\x19", "\x1A" => "\\x1A", "\x1B" => "\\x1B", "\x1C" => "\\x1C",
-			"\x1D" => "\\x1D", "\x1E" => "\\x1E", "\x1F" => "\\x1F"
-		];
+		// var escapeMap = [
+		// 	"\t" => "\\t", "\n" => "\\n", "\r" => "\\r", "\"" => "\\\"", "'" => "\\'", "\\" => "\\\\", "\x01" => "\\c0", "\x02" => "\\c1", "\x03" => "\\c2",
+		// 	"\x04" => "\\c3", "\x05" => "\\c4", "\x06" => "\\c5", "\x07" => "\\c6", "\x0B" => "\\c7", "\x0C" => "\\c8", "\x0E" => "\\c9", "\x0F" => "\\cr",
+		// 	"\x10" => "\\cp", "\x11" => "\\co", "\x08" => "\\x08", "\x12" => "\\x12", "\x13" => "\\x13", "\x14" => "\\x14", "\x15" => "\\x15",
+		// 	"\x16" => "\\x16", "\x17" => "\\x17", "\x18" => "\\x18", "\x19" => "\\x19", "\x1A" => "\\x1A", "\x1B" => "\\x1B", "\x1C" => "\\x1C",
+		// 	"\x1D" => "\\x1D", "\x1E" => "\\x1E", "\x1F" => "\\x1F"
+		// ];
 		var escapeFrom = [
 			"\\", "'", "\"", "\x1F", "\x1E", "\x1D", "\x1C", "\x1B", "\x1A", "\x19", "\x18", "\x17", "\x16", "\x15", "\x14", "\x13", "\x12", "\x11", "\x10",
 			"\x0F", "\x0E", "\r", "\x0C", "\x0B", "\n", "\t", "\x08", "\x07", "\x06", "\x05", "\x04", "\x03", "\x02", "\x01"
@@ -270,27 +280,33 @@ class Scanner {
 		return s;
 	}
 
-	function isDigit(c:String):Bool {
-		return "0123456789".indexOf(c) >= 0;
+	function isDigit(cd:Int):Bool {
+		return cd >= "0".code && cd <= "9".code;
 	}
 
-	function isAlpha(c:String):Bool {
-		return "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ_".indexOf(c) >= 0;
+	function isAlpha(cd:Int):Bool {
+		return ((cd >= "a".code && cd <= "z".code) || (cd >= "A".code && cd <= "Z".code) || cd == "_".code);
 	}
 
-	function isAlphaNumeric(c:String):Bool {
+	function isAlphaNumeric(c:Int):Bool {
 		return isAlpha(c) || isDigit(c);
 	}
 
-	function peekNext():String {
+	function peekNext():Int {
 		if (current + 1 >= source.length)
-			return String.fromCharCode(0);
-		return source.charAt(current + 1);
+			return 0;
+		return StringTools.fastCodeAt(source, current + 1);
 	}
 
 	function hexNumber() {
-		while ("0123456789abcdefABCDEF".indexOf(peek()) >= 0)
-			advance();
+		while (true) {
+			var c = peek();
+			if ((c >= "0".code && c <= "9".code) || (c >= "a".code && c <= "f".code) || (c >= "A".code && c <= "F".code)) {
+				advance();
+			} else {
+				break;
+			}
+		}
 
 		addToken(TokenType.HexInt, source.substring(start, current));
 	}
@@ -302,7 +318,7 @@ class Scanner {
 		var isFloat = false;
 
 		// Look for a fractional part.
-		if (peek() == '.' && isDigit(peekNext())) {
+		if (peek() == '.'.code && isDigit(peekNext())) {
 			isFloat = true;
 			// Consume the "."
 			advance();
@@ -310,10 +326,10 @@ class Scanner {
 			while (isDigit(peek()))
 				advance();
 
-			if (peek() == 'e' || peek() == 'E') {
+			if (peek() == 'e'.code || peek() == 'E'.code) {
 				advance();
 
-				if (peek() == '+' || peek() == '-')
+				if (peek() == '+'.code || peek() == '-'.code)
 					advance();
 
 				while (isDigit(peek()))
@@ -322,12 +338,12 @@ class Scanner {
 		}
 
 		// Look for a exponent part.
-		if (peek() == 'e' || peek() == 'E') {
+		if (peek() == 'e'.code || peek() == 'E'.code) {
 			isFloat = true;
 			// Consume the "e"
 			advance();
 
-			if (peek() == '+' || peek() == '-')
+			if (peek() == '+'.code || peek() == '-'.code)
 				advance();
 
 			while (isDigit(peek()))
