@@ -11,10 +11,23 @@ class Scanner {
 	var line = 1;
 
 	var keywords = [
-		'datablock' => TokenType.Datablock, 'package' => TokenType.Package, 'function' => TokenType.Function, 'if' => TokenType.If, 'else' => TokenType.Else,
-		'while' => TokenType.While, 'for' => TokenType.For, 'break' => TokenType.Break, 'continue' => TokenType.Continue, 'case' => TokenType.Case,
-		'switch' => TokenType.Switch, 'return' => TokenType.Return, 'new' => TokenType.New, 'true' => TokenType.True, 'false' => TokenType.False,
-		'default' => TokenType.Default, 'or' => TokenType.Or
+		'datablock' => TokenType.Datablock,
+		'package' => TokenType.Package,
+		'function' => TokenType.Function,
+		'if' => TokenType.If,
+		'else' => TokenType.Else,
+		'while' => TokenType.While,
+		'for' => TokenType.For,
+		'break' => TokenType.Break,
+		'continue' => TokenType.Continue,
+		'case' => TokenType.Case,
+		'switch' => TokenType.Switch,
+		'return' => TokenType.Return,
+		'new' => TokenType.New,
+		'true' => TokenType.True,
+		'false' => TokenType.False,
+		'default' => TokenType.Default,
+		'or' => TokenType.Or
 	];
 
 	public function new(s:String) {
@@ -72,17 +85,21 @@ class Scanner {
 			case '/'.code:
 				if (match('/')) {
 					// A comment goes until the end of the line.
+					var commentBegin = start;
 					while (peek() != '\n'.code && !isAtEnd()) {
 						advance();
 					}
+					addToken(TokenType.Comment(false), source.substring(commentBegin + 2, current));
 				} else if (match('*')) {
 					// A comment goes until "*/".
+					var commentBegin = start;
 					while (peek() != '*'.code || peekNext() != '/'.code) {
 						if (isAtEnd()) {
 							trace("Unterminated comment.");
 						}
 						advance();
 					}
+					addToken(TokenType.Comment(true), source.substring(commentBegin + 2, current));
 					advance(); // Consume the "/".
 					advance(); // Consume the "*".
 				} else

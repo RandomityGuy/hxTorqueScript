@@ -10,6 +10,8 @@ import haxe.Exception;
 class Parser {
 	var tokens:Array<Token>;
 
+	var comments:Array<Token>;
+
 	var current = 0;
 
 	var panicMode = false;
@@ -19,8 +21,17 @@ class Parser {
 	var syntaxErrors:Array<SyntaxError> = [];
 
 	public function new(tokens:Array<Token>) {
-		this.tokens = tokens;
+		this.tokens = [];
+		this.comments = [];
 		this.positionStack = new GenericStack();
+		for (token in tokens) {
+			switch (token.type) {
+				case Comment(multiline):
+					this.comments.push(token);
+				default:
+					this.tokens.push(token);
+			};
+		}
 	}
 
 	public function parse() {

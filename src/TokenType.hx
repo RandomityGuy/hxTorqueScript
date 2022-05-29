@@ -1,7 +1,6 @@
 package;
 
 enum TokenType {
-	BlockComment;
 	Datablock;
 	Package;
 	Function;
@@ -64,7 +63,6 @@ enum TokenType {
 	TaggedString;
 	Exp;
 	Float;
-	LineComment;
 	Ws;
 	LParen;
 	Colon;
@@ -83,5 +81,6 @@ enum TokenType {
 	MinusMinus;
 	QuestionMark;
 	Eof;
+	Comment(multiline:Bool);
 	Unknown;
 }
