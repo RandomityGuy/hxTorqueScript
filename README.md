@@ -7,6 +7,9 @@ Currently, only DSO bytecode version 33 (Torque Game Engine 1.2) has been implem
 Constant folding optimization is available otherwise it is identical to the output given by Torque Game Engine.  
 The bare minimum TorqueScript Standard Library is in work in progress.
 
+# Web Version
+The web version of this program can be found on [Netlify](https://torquescript.netlify.app)
+
 # Building
 Haxe 4 and the Haxe HashLink runtime is required.
 ```
