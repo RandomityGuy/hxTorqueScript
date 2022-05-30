@@ -43,8 +43,8 @@ class StringTable {
 	public function new() {}
 
 	public function add(str:String, caseSens:Bool, tag:Bool) {
-		if (stringToIndex.exists(caseSens ? str.toLowerCase() : str))
-			return stringToIndex.get(caseSens ? str.toLowerCase() : str);
+		if (stringToIndex.exists(caseSens ? str : str.toLowerCase()))
+			return stringToIndex.get(caseSens ? str: str.toLowerCase());
 
 		var len = str.length + 1;
 		if (tag && len < 7) {
@@ -57,7 +57,7 @@ class StringTable {
 
 		totalLen += len;
 
-		stringToIndex.set(caseSens ? str.toLowerCase() : str, addEntry.start);
+		stringToIndex.set(caseSens ? str : str.toLowerCase(), addEntry.start);
 
 		return addEntry.start;
 	}
